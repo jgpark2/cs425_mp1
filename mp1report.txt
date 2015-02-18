@@ -1,0 +1,9 @@
+Laura Galbraith, galbrth2
+Jonathan Park
+
+Channel Delay Implementation
+
+Consistency Models Implementations
+Linearizability
+Sequential Consistency
+Inconsistency Repair for Eventual Consistency
