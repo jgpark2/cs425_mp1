@@ -1,0 +1,6 @@
+Beej's Socket Programming Guide:
+http://beej.us/guide/bgnet/output/html/singlepage/bgnet.html
+
+C++ Multithreading Example:
+http://stackoverflow.com/questions/266168/simple-example-of-threading-in-c
+
