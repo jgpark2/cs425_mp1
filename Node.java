@@ -18,6 +18,8 @@ public class Node
 	{
 		return -1;
 	}
+	
+	
 	public static void main(String[] args) throws Exception
 	{
 		if (args.length != 2) {
@@ -54,6 +56,33 @@ public class Node
 			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
+		}
+		
+		
+		NodeThreads m = new NodeThreads();
+        new ServerThread(m);
+        new Client(m);
+        new MessageThread(m);
+        
+        
+        ServerSocket s = new ServerSocket(3490); //s for server
+		Socket c = new Socket(ip, 3490); //c for client
+		int count = 0;
+		try {
+			while (count < 4) {
+				c = s.accept();
+				try {
+					PrintWriter out = new PrintWriter(c.getOutputStream(), true);
+					out.println("Hello World!\n");
+					count++;
+				}
+				finally {
+					c.close();
+				}
+			}
+		}
+		finally {
+			s.close();
 		}
 	}
 }
