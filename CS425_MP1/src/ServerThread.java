@@ -13,7 +13,7 @@ public class ServerThread implements Runnable
 	
 	NodeThreads m;
 	
-    public ServerThread(Chat m1) {
+    public ServerThread(NodeThreads m1) {
         this.m = m1;
         new Thread(this, "Sender").start();
     }
