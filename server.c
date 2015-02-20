@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-#include <string.h>
 #include <fstream>
 #include <iostream>
 #include <sys/types.h>
@@ -20,7 +19,8 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <string.h>
+#include <string>
+#include <vector>
 
 //#define PORTA "3490"
 //#define PORTB "3491"
@@ -29,15 +29,21 @@
 
 using namespace std;
 
-final serverNode* self;
-vector<serverNode*> servers;
-
 struct serverNode {
-	char NODE_ID;
+	char* NODE_ID;
 	string IP;
 	string PORT;
 	int MAX_DELAY;
-}
+	
+	serverNode() : IP(""), PORT(""), MAX_DELAY(-1)
+	{
+	}
+};
+
+
+serverNode* self;
+vector<serverNode*> servers;
+
 
 void sigchld_handler(int s)
 {
@@ -68,15 +74,14 @@ int main(int argc, char *argv[])
 	int rv;
 	//char* port;
 
-	if (argc != 2 || ((strcmp(argv[1],"A") != 0) &&
-		(strcmp(argv[1],"B") != 0)) ) {
+	if (argc != 2 || (strcmp(argv[1],"A") && strcmp(argv[1],"B")) ) {
 		fprintf(stderr, "usage: ./server [server_label]\nServer labels can be A or B\n");
 		exit(1);
 	}
 
 	self = new serverNode();
-	self.NODE_ID = argv[1].at(0);
-	cout << "This server's ID is: " << self.NODE_ID;
+	self->NODE_ID = (argv[1]).at(0);
+	cout << "This server's ID is: " << *(self->NODE_ID);
 	/*
 	if (strcmp(argv[1], "B") == 0)
 		port = PORTB;
@@ -106,12 +111,13 @@ int main(int argc, char *argv[])
 	while(getline(config_file, line))
 	{
 		//Remove whitespace
-		line.erase (std::remove (line.begin(), line.end(), ' '), str.end());
+		line.erase (std::remove (line.begin(), line.end(), ' '), line.end());
+		
 		
 		serverNode* curNode = NULL;
 		
 		//Determine what serverNode this line is for
-		if(line.at(0)!=self.NODE_ID) {
+		if(line.at(0)!=self->NODE_ID) {
 			for(vector<serverNode*>::iterator it = servers.begin() ; it!=servers.end(); ++it)
 				if (it.NODE_ID == line.at(0)) {
 					curNode = it;
@@ -121,24 +127,24 @@ int main(int argc, char *argv[])
 			//If no existing node found, create new serverNode with new ID
 			if (curNode==NULL) {
 				curNode = new serverNode();
-				curNode.NODE_ID = line.at(0);
+				curNode->NODE_ID = line.at(0);
 				servers.add(curNode);
 			}
 		}
 		else
 			curNode = self;
 		
-		if (curNode.IP==NULL) {
-			curNode.IP = line.substr(2,line.length-2);
-			cout<<"IP? : " << curNode.IP << endl;
+		if (curNode->IP=="") {
+			curNode->IP = line.substr(2,line.length-2);
+			cout<<"IP? : " << curNode->IP << endl;
 		}		
-		else if (curNode.PORT==NULL) {
-			curNode.PORT = line.substr(2,line.length-2);
-			cout<<"PORT: " << curNode.PORT << endl;
+		else if (curNode->PORT=="") {
+			curNode->PORT = line.substr(2,line.length-2);
+			cout<<"PORT: " << curNode->PORT << endl;
 		}
-		else if (curNode.MAX_DELAY==NULL) {
-			curNode.MAX_DELAY = stoi(line.substr(2,line.length-2), nullptr);
-			cout<<"MAX_DELAY: " << curNode.MAX_DELAY << endl;
+		else if (curNode->MAX_DELAY==-1) {
+			curNode->MAX_DELAY = atoi(line.substr(2,line.length-2), NULL);
+			cout<<"MAX_DELAY: " << curNode->MAX_DELAY << endl;
 		}
 		else
 			cout<<"Found extra undefined field for a node config" <<endl;
@@ -150,7 +156,7 @@ int main(int argc, char *argv[])
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE; //use my IP
 
-	if ((rv = getaddrinfo(NULL, self.PORT, &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(NULL, self->PORT, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
