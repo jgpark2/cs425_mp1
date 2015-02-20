@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 public class Node {
 	
 	private NodeInfo[] nodesinfo = new NodeInfo[4];
+	private String id = "";
 	
 	private int parse(String[] args)
 	{
@@ -35,6 +36,19 @@ public class Node {
 			fis = new FileInputStream(configfile);
 			
 			int content;
+			for (int i=0; i<4; i++) { //four nodes
+				content = fis.read(); //node id
+				char[] carr = new char[1];
+				carr[0] = (char)content;
+				nodesinfo[i].id = new String(carr);
+				
+				content = fis.read();
+				if ((char)content != ',') throw new Exception("config file incorrect");
+				
+				while ((char)(content = fis.read()) != '\n') {
+					nodesinfo[i].ip
+				}
+			}
 			while ((content = fis.read()) != -1) {
 				if ((char)content == id.charAt(0)) {
 					if (ip == "") { //read in rest of IP
