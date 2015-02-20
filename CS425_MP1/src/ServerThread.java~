@@ -58,7 +58,6 @@ public class ServerThread implements Runnable
     }
     
     
-    /*http://tutorials.jenkov.com/java-multithreaded-servers/multithreaded-server.html*/
     private synchronized boolean isStopped() {
         return this.isStopped;
     }

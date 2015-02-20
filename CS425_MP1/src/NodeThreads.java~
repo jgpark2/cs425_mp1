@@ -13,7 +13,7 @@ public class NodeThreads
 	
 	boolean flag = false;
 
-    public synchronized void Question(String msg) { //Pass in message to send, and destination server
+    public synchronized void Question(String msg) {
         if (flag) {
             try {
                 wait();

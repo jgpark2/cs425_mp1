@@ -81,14 +81,9 @@ public class Node {
 		
 		
 		NodeThreads m = new NodeThreads();
-		
-        ServerThread server = new ServerThread(m);
-        
+        new ServerThread(m);
         new Client(m);
         new MessageThread(m);
-        
-        System.out.println("Stopping Server");
-		server.stop();
 		
 	}
 
