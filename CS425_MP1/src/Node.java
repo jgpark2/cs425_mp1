@@ -6,31 +6,25 @@ import java.io.InputStreamReader;
 import java.io.File;
 import java.io.FileInputStream;
 
-import NodeInfo;
-
-public class Node
-{
-	private String id; //from user
-	private String ip; //filled in by config file
-	private int port;
+public class Node {
 	
-	private int connect()
-	{
-		return -1;
-	}
-	public static void main(String[] args) throws Exception
+	private NodeInfo[] nodesinfo = new NodeInfo[4];
+	
+	private int parse(String[] args)
 	{
 		if (args.length != 2) {
 			System.out.println("usage: java Server [server_id]");
-			return;
+			return -1;
 		}
+		
 		id = args[1].toUpperCase();
+		
 		if (id.compareTo("A") != 0
 			&& id.compareTo("B") != 0
 			&& id.compareTo("C") != 0
 			&& id.compareTo("D") != 0) {
 			System.out.println("server ids must be A, B, C, D");
-			return;
+			return -1;
 		}
 
 		//Parsing config file
@@ -41,13 +35,20 @@ public class Node
 			fis = new FileInputStream(configfile);
 			
 			int content;
-			while ((char)(content = fis.read()) != id.at(0)) {
-				if (id.at(0) == (char) content)
+			while ((content = fis.read()) != -1) {
+				if ((char)content == id.charAt(0)) {
+					if (ip == "") { //read in rest of IP
+						ip.
+						while ((char)(content = fis.read()) != '\n') {
+							
+						}
+					}
+				}
 			}
 			
 		} catch (Exception e) { //if config file can't be parsed, exit
 			e.printStackTrace();
-			return;
+			return -1;
 		} finally {
 			try {
 				if (fis != null) fis.close();
@@ -55,5 +56,14 @@ public class Node
 				ex.printStackTrace();
 			}
 		}
+		return 0;
 	}
+	
+	public static void main(String[] args) throws Exception
+	{
+		Node node = new Node();
+		if (node.parse(args) == -1)
+			return;
+	}
+
 }
