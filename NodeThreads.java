@@ -4,7 +4,7 @@ import java.io.PrintWriter;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
-public class ServerThreads
+public class NodeThreads
 {
 	//like Chat, this will contain the server thread, the client thread,
 	//	and the message-sending thread
