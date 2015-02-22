@@ -1,8 +1,4 @@
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.io.PrintWriter;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+
 
 public class NodeThreads
 {
@@ -10,6 +6,9 @@ public class NodeThreads
 	//	and the message-sending thread
 	//  it may have public methods to send key, delete key, etc.
 	//	that will get called by Server
+	//contains info about all the nodes, just like the Node class
+	
+	NodeInfo[] info;
 	
 	boolean flag = false;
 
@@ -38,5 +37,22 @@ public class NodeThreads
         System.out.println(msg);
         flag = false;
         notify();
+    }
+    
+    public NodeInfo getNodeInfo(String id) {
+    	if (id.compareTo("A") == 0)
+    		return info[0];
+    	else if (id.compareTo("B") == 0)
+    		return info[1];
+    	else if (id.compareTo("C") == 0)
+    		return info[2];
+    	else if (id.compareTo("D") == 0)
+    		return info[3];
+    	else
+    		return new NodeInfo();
+    }
+    
+    NodeThreads(NodeInfo[] ni) {
+    	info = ni;
     }
 }

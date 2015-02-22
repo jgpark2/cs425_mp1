@@ -1,14 +1,14 @@
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.io.StringWriter;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.io.File;
 import java.io.FileInputStream;
 
 public class Node {
 	
 	private NodeInfo[] nodesinfo;
+	private NodeThreads threads;
+	private ServerThread st;
+	//private ClientThread ct;
+	private MessageThread mt;
 	private String id = "";
 	
 	private int parse(String[] args)
@@ -102,11 +102,19 @@ public class Node {
 		return 0;
 	}
 	
+	public void start() {
+		threads = new NodeThreads(nodesinfo);
+		st = new ServerThread(threads);
+		//ct = new ClientThread(threads);
+		mt = new MessageThread(threads);
+	}
+	
 	public static void main(String[] args) throws Exception
 	{
 		Node node = new Node();
 		if (node.parse(args) == -1)
 			return;
+		node.start();
 	}
 
 }
