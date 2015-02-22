@@ -1,6 +1,6 @@
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.File;
@@ -16,9 +16,7 @@ public class Node {
 		nodesinfo = new NodeInfo[4];
 		for (int i=0; i<4; i++)
 			nodesinfo[i] = new NodeInfo();
-		System.out.print("args: ");
-		for (int i=0; i<args.length; i++)
-			System.out.print(args[i] + " ");
+
 		if (args.length != 1) {
 			System.out.println("usage: java Node [node_id]");
 			return -1;
@@ -35,66 +33,52 @@ public class Node {
 		}
 
 		//Parsing config file
-		File configfile = new File("config.txt");
+		File configfile = new File("/home/galbrth2/cs425/cs425_mp1/CS425_MP1/src/config"); //can't seem to make this a non-absolute path
 		FileInputStream fis = null;
 
 		try {
 			fis = new FileInputStream(configfile);
-			
+			StringWriter str = new StringWriter();
 			int content;
+			
 			for (int i=0; i<4; i++) { //four nodes id, ip
 				content = fis.read(); //node id
-				char[] carr = new char[1];
-				carr[0] = (char)content;
-				System.out.println("content: "+carr[0]+", id: "+(new String(carr)));
-				nodesinfo[i].id = new String(carr);
+				str.write(content);
+				nodesinfo[i].id = str.toString();
+				str = new StringWriter();
 				
-				content = fis.read();
-				if ((char)content != ',') throw new Exception("config file incorrect");
+				content = fis.read(); //,
 				
-				while ((char)(content = fis.read()) != '\n') { //node ip
-					carr[0] = (char)content;
-					nodesinfo[i].ip.concat(new String(carr));
-				}
+				while ((char)(content = fis.read()) != '\n') //node ip
+					str.write(content);
+
+				nodesinfo[i].ip = str.toString();
+				str = new StringWriter();
 			}
 			
 			for (int i=0; i<4; i++) { //four nodes port
 				content = fis.read(); //node id
-				char[] carr = new char[1];
-				carr[0] = (char)content;
-				if (nodesinfo[i].id.compareTo(new String(carr)) != 0) {
-					throw new Exception ("config file incorrect");
-				}
 				
-				content = fis.read();
-				if ((char)content != ',') throw new Exception("config file incorrect");
+				content = fis.read(); //,
 				
-				String portnumstr = "";
-				while ((char)(content = fis.read()) != '\n') { //node port
-					carr[0] = (char)content;
-					portnumstr.concat(new String(carr));
-				}
-				Integer portnumint = new Integer(portnumstr);
+				while ((char)(content = fis.read()) != '\n') //node port
+					str.write(content);
+
+				Integer portnumint = new Integer(str.toString());
+				str = new StringWriter();
 				nodesinfo[i].port = portnumint.intValue();
 			}
 			
 			for (int i=0; i<4; i++) { //four nodes max delay
 				content = fis.read(); //node id
-				char[] carr = new char[1];
-				carr[0] = (char)content;
-				if (nodesinfo[i].id.compareTo(new String(carr)) != 0) {
-					throw new Exception ("config file incorrect");
-				}
+
+				content = fis.read(); //,
+
+				while ((char)(content = fis.read()) != '\n') //node max delay
+					str.write(content);
 				
-				content = fis.read();
-				if ((char)content != ',') throw new Exception("config file incorrect");
-				
-				String mdstr = "";
-				while ((char)(content = fis.read()) != '\n') { //node max delay
-					carr[0] = (char)content;
-					mdstr.concat(new String(carr));
-				}
-				Double mddouble = new Double(mdstr);
+				Double mddouble = new Double(str.toString());
+				str = new StringWriter();
 				nodesinfo[i].max_delay = mddouble.doubleValue();
 			}
 			
