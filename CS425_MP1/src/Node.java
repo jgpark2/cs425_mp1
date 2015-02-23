@@ -1,63 +1,85 @@
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.io.PrintWriter;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.StringWriter;
 import java.io.File;
 import java.io.FileInputStream;
 
 public class Node {
 	
-	private NodeInfo[] nodesinfo = new NodeInfo[4];
+	private NodeInfo[] nodesinfo;
+	private NodeThreads threads;
+	private ServerThread st;
+	//private ClientThread ct;
+	private MessageThread mt;
 	private String id = "";
 	
 	private int parse(String[] args)
 	{
-		if (args.length != 2) {
-			System.out.println("usage: java Server [server_id]");
+		nodesinfo = new NodeInfo[4];
+		for (int i=0; i<4; i++)
+			nodesinfo[i] = new NodeInfo();
+
+		if (args.length != 1) {
+			System.out.println("usage: java Node [node_id]");
 			return -1;
 		}
 		
-		id = args[1].toUpperCase();
+		id = args[0].toUpperCase();
 		
 		if (id.compareTo("A") != 0
 			&& id.compareTo("B") != 0
 			&& id.compareTo("C") != 0
 			&& id.compareTo("D") != 0) {
-			System.out.println("server ids must be A, B, C, D");
+			System.out.println("node ids must be A, B, C, D");
 			return -1;
 		}
 
 		//Parsing config file
-		File configfile = new File("config");
+		File configfile = new File("/home/galbrth2/cs425/cs425_mp1/CS425_MP1/src/config"); //can't seem to make this a non-absolute path
 		FileInputStream fis = null;
 
 		try {
 			fis = new FileInputStream(configfile);
-			
+			StringWriter str = new StringWriter();
 			int content;
-			for (int i=0; i<4; i++) { //four nodes
+			
+			for (int i=0; i<4; i++) { //four nodes id, ip
 				content = fis.read(); //node id
-				char[] carr = new char[1];
-				carr[0] = (char)content;
-				nodesinfo[i].id = new String(carr);
+				str.write(content);
+				nodesinfo[i].id = str.toString();
+				str = new StringWriter();
 				
-				content = fis.read();
-				if ((char)content != ',') throw new Exception("config file incorrect");
+				content = fis.read(); //,
 				
-				while ((char)(content = fis.read()) != '\n') {
-					nodesinfo[i].ip
-				}
+				while ((char)(content = fis.read()) != '\n') //node ip
+					str.write(content);
+
+				nodesinfo[i].ip = str.toString();
+				str = new StringWriter();
 			}
-			while ((content = fis.read()) != -1) {
-				if ((char)content == id.charAt(0)) {
-					if (ip == "") { //read in rest of IP
-						ip.
-						while ((char)(content = fis.read()) != '\n') {
-							
-						}
-					}
-				}
+			
+			for (int i=0; i<4; i++) { //four nodes port
+				content = fis.read(); //node id
+				
+				content = fis.read(); //,
+				
+				while ((char)(content = fis.read()) != '\n') //node port
+					str.write(content);
+
+				Integer portnumint = new Integer(str.toString());
+				str = new StringWriter();
+				nodesinfo[i].port = portnumint.intValue();
+			}
+			
+			for (int i=0; i<4; i++) { //four nodes max delay
+				content = fis.read(); //node id
+
+				content = fis.read(); //,
+
+				while ((char)(content = fis.read()) != '\n') //node max delay
+					str.write(content);
+				
+				Double mddouble = new Double(str.toString());
+				str = new StringWriter();
+				nodesinfo[i].max_delay = mddouble.doubleValue();
 			}
 			
 		} catch (Exception e) { //if config file can't be parsed, exit
@@ -70,7 +92,21 @@ public class Node {
 				ex.printStackTrace();
 			}
 		}
+		
+		for (int i=0; i<4; i++) { //test that node info is correct
+			System.out.print("Node " + nodesinfo[i].id + ": ");
+			System.out.print("IP: " + nodesinfo[i].ip + " ");
+			System.out.print("Port: " + nodesinfo[i].port + " ");
+			System.out.println("Max delay: " + nodesinfo[i].max_delay);
+		}
 		return 0;
+	}
+	
+	public void start() {
+		threads = new NodeThreads(nodesinfo);
+		st = new ServerThread(threads);
+		//ct = new ClientThread(threads);
+		mt = new MessageThread(threads);
 	}
 	
 	public static void main(String[] args) throws Exception
@@ -79,6 +115,7 @@ public class Node {
 		if (node.parse(args) == -1)
 			return;
 		
+		node.start();
 		
 		NodeThreads m = new NodeThreads();
 		
@@ -89,6 +126,7 @@ public class Node {
         
         System.out.println("Stopping Server");
 		server.stop();
+
 		
 	}
 
