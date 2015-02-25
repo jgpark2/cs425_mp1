@@ -110,26 +110,23 @@ public class Node {
 	}
 	
 	public static void main(String[] args) throws Exception
-	{
+	{/*
 		Node node = new Node();
 		if (node.parse(args) == -1)
 			return;
-<<<<<<< HEAD
 		
-		
-		NodeThreads m = new NodeThreads();
-		
-        ServerThread server = new ServerThread(m);
-        
-        new Client(m);
-        new MessageThread(m);
-        
-        System.out.println("Stopping Server");
-		server.stop();
-		
-=======
 		node.start();
->>>>>>> d5f64781f66d459a191051a7b394512a1c7f5bc1
+		
+		//
+		NodeThreads m = new NodeThreads();
+		*/
+		//Start the RECV thread
+        //new Thread(new Client(), "Receiver").start();
+        
+        //Start the SEND thread
+        new Thread(new ServerThread(), "Sender").start();
+        
+        //new Thread(new MessageThread(), "Delayer._.").start();
 	}
 
 }

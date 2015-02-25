@@ -38,9 +38,6 @@ public class NodeThreads
         flag = false;
         notify();
     }
-<<<<<<< HEAD
-}
-=======
     
     public NodeInfo getNodeInfo(String id) {
     	if (id.compareTo("A") == 0)
@@ -59,4 +56,3 @@ public class NodeThreads
     	info = ni;
     }
 }
->>>>>>> d5f64781f66d459a191051a7b394512a1c7f5bc1

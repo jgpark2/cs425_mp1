@@ -3,7 +3,7 @@ import java.io.File;
 import java.io.FileInputStream;
 
 public class Node {
-	
+	/*
 	private NodeInfo[] nodesinfo;
 	private NodeThreads threads;
 	private ServerThread st;
@@ -109,25 +109,26 @@ public class Node {
 		mt = new MessageThread(threads);
 	}
 	
+	*/
+	
 	public static void main(String[] args) throws Exception
-	{
+	{/*
 		Node node = new Node();
 		if (node.parse(args) == -1)
 			return;
 		
 		node.start();
 		
+		//
 		NodeThreads m = new NodeThreads();
-		
-        ServerThread server = new ServerThread(m);
+		*/
+		//Start the RECV thread
+        //new Thread(new Client(), "Receiver").start();
         
-        new Client(m);
-        new MessageThread(m);
+        //Start the SEND thread
+        new Thread(new ServerThread(), "Sender").start();
         
-        System.out.println("Stopping Server");
-		server.stop();
-
-		
+        //new Thread(new MessageThread(), "Delayer._.").start();
 	}
 
 }

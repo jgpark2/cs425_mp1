@@ -1,0 +1,8 @@
+javac -d target CS425_MP1/src/Node.java CS425_MP1/src/ServerThread.java CS425_MP1/src/Client.java
+
+java -cp target Node
+
+
+netstat -anp|grep :8080[[:blank:]]
+
+kill -9 PID

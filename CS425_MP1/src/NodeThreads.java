@@ -2,11 +2,11 @@
 
 public class NodeThreads
 {
-	//like Chat, this will contain the server thread, the client thread,
+	// like Chat, This class will contain the server thread, the client thread,
 	//	and the message-sending thread
 	//  it may have public methods to send key, delete key, etc.
 	//	that will get called by Server
-	//contains info about all the nodes, just like the Node class
+	// This class contains all the info about all the nodes.
 	
 	NodeInfo[] info;
 	
