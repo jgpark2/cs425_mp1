@@ -41,7 +41,7 @@ public class MessageThread extends Thread
 	
 	@Override
 	public void run() {
-		String msgInput, msgOutput;
+		String msgInput=null, msgOutput = null;
 		
 		//While the server keeps writing to us on its own output Stream...
 		try {
@@ -53,24 +53,28 @@ public class MessageThread extends Thread
 			
 			
 			while(true) {
-				msgInput = ins.readLine();
-				if (msgInput != null) {
+				System.out.print("Waiting for server");
+				while (msgInput == null) {
+					msgInput = ins.readLine();
 					System.out.println("Server" + serverNode.id+": " + msgInput);
 				
 					if (msgInput.equals("Bye")) //Received disconnect Msg
 						break;
 				}
+				msgInput = null;
 
-				synchronized(sysIn) {
+				
+				while(msgOutput == null) {
+					System.out.print("Waiting for input");
 					msgOutput = sysIn.readLine(); //Grab command line input
 					msgOutput = parseCommand(msgOutput);
-					if (msgOutput != null) {
-						System.out.println("Client: " + msgOutput);
-						outs.println(msgOutput);
-					}
-					//TODO: the synchronized sysIn is temporary. change it so that Client sends msg to all MessageThreads or smthn
 				}
-
+				if (msgOutput.compareTo("")==0) //Special case where we read a message our thread doesn't care about
+					continue;
+				System.out.println("Client: " + msgOutput);
+				outs.println(msgOutput);
+				msgOutput = null;
+				
 			}
 			
 			
@@ -104,29 +108,36 @@ public class MessageThread extends Thread
 		int len;
 		if ((len = cmd.length()) < 6) {
 			//System.out.println("cmd was too short");
-			return null;
+			return null; //null for re-input
 		}
 		
 		if (cmd.charAt(len-2) != ' ') {
 			//System.out.println("cmd did not have space");
-			return null;
+			return null; //null for re-input
 		}
 		
 		StringWriter id = new StringWriter();
 		id.append(cmd.charAt(len-1));
-		if (id.toString().compareTo(serverNode.id) != 0) {
-			//System.out.print("id: \"" + id.toString() + "\", serverid: "+serverNode.id);
+		//Only allow A, B, C, or D as servers
+		if (id.toString().compareToIgnoreCase("A")!=0 && id.toString().compareToIgnoreCase("B")!=0
+				&& id.toString().compareToIgnoreCase("C")!=0 && id.toString().compareToIgnoreCase("D")!=0) {
+			System.out.print("Server id must be one of: A,B,C,D");
 			//System.out.println(" cmd did not have serverid");
-			return null; //this message will be sent by another MessageThread
+			return null; //null for re-input
 		}
+		//TODO: ignore messages designated to myself->later i think we CAN send messages to our self, just dont delay it or anything
+		if (id.toString().compareToIgnoreCase(myInfo.id) == 0) {
+			return null;
+		}
+		
 		
 		id = new StringWriter();
 		int i=0;
 		for (i=0; i<5; i++) //should be "send "
 			id.append(cmd.charAt(i));
 		if (id.toString().compareToIgnoreCase("send ") != 0) {
-			//System.out.print("id: \"" + id.toString() + "\"");
-			//System.out.println("cmd did not have send");
+			System.out.print("id: \"" + id.toString() + "\"");
+			System.out.println("cmd did not have send");
 			return null;
 		}
 		
@@ -134,6 +145,14 @@ public class MessageThread extends Thread
 		for (i=5; i<(len-2); i++)
 			id.append(cmd.charAt(i));
 		
+		//Only manage messages that are supposed to be sent to the destination we handle.
+		//Check this last since we want to check this AFTER we know that the destination input is valid to begin with
+		if (id.toString().compareToIgnoreCase(serverNode.id) != 0) {
+			//System.out.print("id: \"" + id.toString() + "\", serverid: "+serverNode.id);
+			//System.out.println(" cmd did not have serverid");
+			return ""; //empty string signifies that this message will be sent by another MessageThread
+		}
+				
 		return id.toString();
 	}
 	

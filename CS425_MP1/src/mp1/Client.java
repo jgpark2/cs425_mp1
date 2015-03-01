@@ -17,6 +17,7 @@ public class Client implements Runnable
    	private NodeInfo myInfo;
    	private Socket[] client = {null,null,null,null};
    	BufferedReader sysIn;
+   	BufferedReader[] mtSysIn = {null,null,null,null};
    	
    	
    	
@@ -27,29 +28,31 @@ public class Client implements Runnable
     
     
     public void run(){
+    	
+    	sysIn = new BufferedReader(new InputStreamReader(System.in));
+    	
     	System.out.print("Identified the servers to connect to as: ");
     	for (int i=0; i<4; ++i) {
+    		mtSysIn[i] = sysIn;
     		if (nodesInfo[i].id.compareTo(myInfo.id)!=0) {
     			System.out.print(nodesInfo[i].id+", ");    				
     		}
     	}
     	System.out.println(" ");
     	
-    	sysIn = new BufferedReader(new InputStreamReader(System.in));
-    	
     	for (int i=0; i<4; ++i) {
     		//Skip my own server
     		if (nodesInfo[i].id.compareTo(myInfo.id)==0) 
     			continue;
     		
-    		//connect to 3 other servers one by one consistently
+    		//connect to 3 other servers one by one
     		serverPort = nodesInfo[i].port;
         	serverAddr = nodesInfo[i].ip;
         	while(client[i]==null) {
     	    	try {
     				client[i] = new Socket(serverAddr, serverPort);
     				System.out.println("Now connected to "+serverAddr+":"+serverPort);
-                    MessageThread mt=new MessageThread(nodesInfo, myInfo, nodesInfo[i], client[i], sysIn);
+                    MessageThread mt=new MessageThread(nodesInfo, myInfo, nodesInfo[i], client[i], mtSysIn[i]);
                     mt.start();
     					
     			} catch (IOException e) {
@@ -58,8 +61,6 @@ public class Client implements Runnable
     			}
         	}
     	}
-    	
-    	
     	
 		
 	}
