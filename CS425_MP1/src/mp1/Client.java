@@ -15,40 +15,52 @@ public class Client implements Runnable
     
     private NodeInfo[] nodesInfo;
    	private NodeInfo myInfo;
-   	private NodeInfo serverNode;
-   	private Socket client = null;
+   	private Socket[] client = {null,null,null,null};
+   	BufferedReader sysIn;
    	
    	
    	
-    public Client(NodeInfo[] allNodes, NodeInfo curNode, NodeInfo serverNode) {
+    public Client(NodeInfo[] allNodes, NodeInfo curNode) {
     	nodesInfo = allNodes;
     	myInfo = curNode;
-    	
-    	//The info of the Node server to which this client would connect to
-    	this.serverNode = serverNode;
-    	
-		System.out.println("Identified server to connect to as: "+serverNode.id);
-    	serverPort = serverNode.port;
-    	serverAddr = serverNode.ip;
     }
     
     
-    public void run(){		
-		
-    	//new Thread(new MessageThread(), "Delayer._.").start();
-    	
-		//connect to 3 other servers constantly (change client to client array)
-    	while(client==null) {
-	    	try {
-				client = new Socket(serverAddr, serverPort);
-				System.out.println("Now connected to "+serverAddr+":"+serverPort);
-                MessageThread mt=new MessageThread(nodesInfo, myInfo, serverNode, client);
-                mt.start();
-					
-			} catch (IOException e) {
-				//System.out.println("Connect to server failed");
-				client=null;
-			}
+    public void run(){
+    	System.out.print("Identified the servers to connect to as: ");
+    	for (int i=0; i<4; ++i) {
+    		if (nodesInfo[i].id.compareTo(myInfo.id)!=0) {
+    			System.out.print(nodesInfo[i].id+", ");    				
+    		}
     	}
+    	System.out.println(" ");
+    	
+    	sysIn = new BufferedReader(new InputStreamReader(System.in));
+    	
+    	for (int i=0; i<4; ++i) {
+    		//Skip my own server
+    		if (nodesInfo[i].id.compareTo(myInfo.id)==0) 
+    			continue;
+    		
+    		//connect to 3 other servers one by one consistently
+    		serverPort = nodesInfo[i].port;
+        	serverAddr = nodesInfo[i].ip;
+        	while(client[i]==null) {
+    	    	try {
+    				client[i] = new Socket(serverAddr, serverPort);
+    				System.out.println("Now connected to "+serverAddr+":"+serverPort);
+                    MessageThread mt=new MessageThread(nodesInfo, myInfo, nodesInfo[i], client[i], sysIn);
+                    mt.start();
+    					
+    			} catch (IOException e) {
+    				//System.out.println("Connect to server failed");
+    				client[i]=null;
+    			}
+        	}
+    	}
+    	
+    	
+    	
+		
 	}
 }

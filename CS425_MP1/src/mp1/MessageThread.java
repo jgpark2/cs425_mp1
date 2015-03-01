@@ -27,11 +27,13 @@ public class MessageThread extends Thread
 	protected BufferedReader sysIn;
 	
 	
-	MessageThread(NodeInfo[] allNodes, NodeInfo curNode, NodeInfo serverNode, Socket mySocket) {
+	MessageThread(NodeInfo[] allNodes, NodeInfo curNode, NodeInfo serverNode, Socket mySocket, BufferedReader systemInput) {
 		nodesInfo = allNodes;
 		myInfo = curNode;
 		this.serverNode = serverNode;
 		client = mySocket;
+		
+		sysIn = systemInput;
     	
 		//this.t = t;
 		//new Thread(this, "Answer").start();
@@ -46,29 +48,34 @@ public class MessageThread extends Thread
 			
 			outs = new PrintWriter(client.getOutputStream(), true);
 			ins = new BufferedReader(new InputStreamReader(client.getInputStream()));
-			sysIn = new BufferedReader(new InputStreamReader(System.in));
+			
+			//sysIn = new BufferedReader(new InputStreamReader(System.in));
 			
 			
 			while(true) {
 				msgInput = ins.readLine();
 				if (msgInput != null) {
-					System.out.println("Server: " + msgInput);
+					System.out.println("Server" + serverNode.id+": " + msgInput);
 				
 					if (msgInput.equals("Bye")) //Received disconnect Msg
 						break;
 				}
-				
+
+				synchronized(sysIn) {
 					msgOutput = sysIn.readLine(); //Grab command line input
 					msgOutput = parseCommand(msgOutput);
 					if (msgOutput != null) {
 						System.out.println("Client: " + msgOutput);
 						outs.println(msgOutput);
 					}
+					//TODO: the synchronized sysIn is temporary. change it so that Client sends msg to all MessageThreads or smthn
+				}
+
 			}
 			
 			
 		} catch (IOException e) {
-			System.out.println("Socket reading error");
+			System.out.println("With "+ serverNode.id+", Socket reading error");
 			e.printStackTrace();
 		} finally{
 			try {
@@ -87,7 +94,7 @@ public class MessageThread extends Thread
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			System.out.println("Connection Closed");
+			System.out.println("Connection Closed with "+serverNode.id);
 	    }	
 		/*while (true)
 			sendQueuedMessages();*/
