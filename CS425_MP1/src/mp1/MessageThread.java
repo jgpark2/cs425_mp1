@@ -7,6 +7,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Queue;
 import java.util.Random;
+import java.io.StringWriter;
 
 public class MessageThread extends Thread
 {
@@ -18,7 +19,7 @@ public class MessageThread extends Thread
 	
 	private NodeInfo[] nodesInfo;
    	private NodeInfo myInfo;
-   	private NodeInfo serverNode;
+   	private NodeInfo serverNode; //node that this messagethread is sending messages to
    	private Socket client;
    	
 	protected PrintWriter outs;
@@ -48,15 +49,21 @@ public class MessageThread extends Thread
 			sysIn = new BufferedReader(new InputStreamReader(System.in));
 			
 			
-			while((msgInput = ins.readLine())!=null) {
-				System.out.println("Server: " + msgInput);
+			while(true) {
+				msgInput = ins.readLine();
+				if (msgInput != null) {
+					System.out.println("Server: " + msgInput);
 				
-				if (msgInput.equals("Bye")) //Received disconnect Msg
-					break;
+					if (msgInput.equals("Bye")) //Received disconnect Msg
+						break;
+				}
 				
-				msgOutput = sysIn.readLine(); //Grab command line input
-				System.out.println("Client: " + msgOutput);
-				outs.println(msgOutput);
+					msgOutput = sysIn.readLine(); //Grab command line input
+					msgOutput = parseCommand(msgOutput);
+					if (msgOutput != null) {
+						System.out.println("Client: " + msgOutput);
+						outs.println(msgOutput);
+					}
 			}
 			
 			
@@ -84,7 +91,44 @@ public class MessageThread extends Thread
 	    }	
 		/*while (true)
 			sendQueuedMessages();*/
-	}	
+	}
+	
+	private String parseCommand(String cmd) { //"Send Hello B"
+		int len;
+		if ((len = cmd.length()) < 6) {
+			//System.out.println("cmd was too short");
+			return null;
+		}
+		
+		if (cmd.charAt(len-2) != ' ') {
+			//System.out.println("cmd did not have space");
+			return null;
+		}
+		
+		StringWriter id = new StringWriter();
+		id.append(cmd.charAt(len-1));
+		if (id.toString().compareTo(serverNode.id) != 0) {
+			//System.out.print("id: \"" + id.toString() + "\", serverid: "+serverNode.id);
+			//System.out.println(" cmd did not have serverid");
+			return null; //this message will be sent by another MessageThread
+		}
+		
+		id = new StringWriter();
+		int i=0;
+		for (i=0; i<5; i++) //should be "send "
+			id.append(cmd.charAt(i));
+		if (id.toString().compareToIgnoreCase("send ") != 0) {
+			//System.out.print("id: \"" + id.toString() + "\"");
+			//System.out.println("cmd did not have send");
+			return null;
+		}
+		
+		id = new StringWriter();
+		for (i=5; i<(len-2); i++)
+			id.append(cmd.charAt(i));
+		
+		return id.toString();
+	}
 	
 	
 	public void addMessageToQueue(Integer m) {
