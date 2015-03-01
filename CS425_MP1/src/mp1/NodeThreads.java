@@ -1,16 +1,25 @@
+package mp1;
 
 
 public class NodeThreads
 {
-	//like Chat, this will contain the server thread, the client thread,
+	// like Chat, This class will contain the server thread, the client thread,
 	//	and the message-sending thread
 	//  it may have public methods to send key, delete key, etc.
 	//	that will get called by Server
-	//contains info about all the nodes, just like the Node class
+	// This class contains all the info about all the nodes.
 	
 	NodeInfo[] info;
 	
 	boolean flag = false;
+	
+	public NodeThreads() {
+		
+	}
+	
+	public NodeThreads(NodeInfo[] ni) {
+    	info = ni;
+    }
 
     public synchronized void Question(String msg) { //Pass in message to send, and destination server
         if (flag) {
@@ -52,7 +61,4 @@ public class NodeThreads
     		return new NodeInfo();
     }
     
-    NodeThreads(NodeInfo[] ni) {
-    	info = ni;
-    }
 }

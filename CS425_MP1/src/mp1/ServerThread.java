@@ -1,3 +1,5 @@
+package mp1;
+
 import java.net.*;
 import java.io.*;
 
@@ -5,11 +7,11 @@ import java.io.*;
  * ServerThread.java
  * This class should be on a thread.
  * This thread listens and receives messages through the sockets defined at the start
- * (ip addr and port #). 
+ * (port #). 
  */
  
  
- public class ServerThread implements Runnable
+public class ServerThread implements Runnable
 {
 
 	protected int          serverPort   = 7500;
@@ -24,11 +26,16 @@ import java.io.*;
 	//have public methods such as setting up on a certain port/ip
 	//it will call methods in ServerThreads to convey messages
 	
-	//NodeThreads m;
+    private NodeInfo[] nodesInfo;
+	private NodeInfo myInfo;
 	
-    public ServerThread(/*NodeThreads m1, int port*/) { 
+    public ServerThread(NodeInfo[] allNodes, NodeInfo curNode) { 
         //this.m = m1;
         //this.serverPort = port;
+    	nodesInfo = allNodes;
+    	myInfo = curNode;
+    	
+    	serverPort = myInfo.port;
         /*try {
         	localHost = InetAddress.getLocalHost();
 		} catch (UnknownHostException uhe) {
@@ -52,6 +59,7 @@ import java.io.*;
 			return;
         }
         
+        System.out.println("Now listening on "+serverPort+"...");
         
         Socket clientSocket;
         BufferedReader in;

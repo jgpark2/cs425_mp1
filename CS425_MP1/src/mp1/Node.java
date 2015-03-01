@@ -1,39 +1,60 @@
+package mp1;
 import java.io.StringWriter;
 import java.io.File;
 import java.io.FileInputStream;
 
 public class Node {
-	/*
+
 	private NodeInfo[] nodesinfo;
+	private NodeInfo myInfo;
 	private NodeThreads threads;
 	private ServerThread st;
 	//private ClientThread ct;
 	private MessageThread mt;
-	private String id = "";
+	
+	public static void main(String[] args) throws Exception
+	{
+		if (args.length != 1) {
+			System.out.println("Usage: java Node [node_id]");
+			System.exit(1);
+			return;
+		}
+		
+		Node node = new Node();
+		
+		if (node.parse(args) == -1) {
+			System.out.println("Failed to parse config");
+			System.exit(1);
+			return;
+		}
+		
+		node.start();
+		
+		
+	}
+	
 	
 	private int parse(String[] args)
 	{
 		nodesinfo = new NodeInfo[4];
+		
+		
 		for (int i=0; i<4; i++)
 			nodesinfo[i] = new NodeInfo();
-
-		if (args.length != 1) {
-			System.out.println("usage: java Node [node_id]");
-			return -1;
-		}
 		
-		id = args[0].toUpperCase();
+		String id = args[0].toUpperCase();
 		
 		if (id.compareTo("A") != 0
 			&& id.compareTo("B") != 0
 			&& id.compareTo("C") != 0
 			&& id.compareTo("D") != 0) {
-			System.out.println("node ids must be A, B, C, D");
+			System.out.println("node ids must be A, B, C, or D");
 			return -1;
 		}
 
 		//Parsing config file
-		File configfile = new File("/home/galbrth2/cs425/cs425_mp1/CS425_MP1/src/config"); //can't seem to make this a non-absolute path
+		//File configfile = new File("/home/galbrth2/cs425/cs425_mp1/CS425_MP1/src/config"); //can't seem to make this a non-absolute path
+		File configfile = new File("config");
 		FileInputStream fis = null;
 
 		try {
@@ -45,6 +66,13 @@ public class Node {
 				content = fis.read(); //node id
 				str.write(content);
 				nodesinfo[i].id = str.toString();
+				
+				if (str.toString().compareTo(id)==0) {
+					System.out.println("Identified this node as "+str.toString());
+					myInfo = nodesinfo[i];
+				}
+				
+				
 				str = new StringWriter();
 				
 				content = fis.read(); //,
@@ -102,33 +130,23 @@ public class Node {
 		return 0;
 	}
 	
-	public void start() {
-		threads = new NodeThreads(nodesinfo);
-		st = new ServerThread(threads);
-		//ct = new ClientThread(threads);
-		mt = new MessageThread(threads);
-	}
-	
-	*/
-	
-	public static void main(String[] args) throws Exception
-	{/*
-		Node node = new Node();
-		if (node.parse(args) == -1)
-			return;
-		
-		node.start();
-		
-		//
-		NodeThreads m = new NodeThreads();
-		*/
-		//Start the RECV thread
-        //new Thread(new Client(), "Receiver").start();
-        
+	public void start() {        
         //Start the SEND thread
-        new Thread(new ServerThread(), "Sender").start();
+        new Thread(new ServerThread(nodesinfo, myInfo), "Sender").start();
         
+        //Start the RECV threads
+        //For now, have only 2 servers connect to eachother, A connects to B and vice versa only
+		NodeInfo tempNode;
+		if (myInfo.id.compareTo("A")==0)
+			tempNode = nodesinfo[1];
+		else tempNode = nodesinfo[0];
+		
+		new Thread(new Client(nodesinfo, myInfo, tempNode), "Receiver").start();
+	      
         //new Thread(new MessageThread(), "Delayer._.").start();
+        
+        
+		//threads = new NodeThreads(nodesinfo);
+		//mt = new MessageThread(threads);
 	}
-
 }

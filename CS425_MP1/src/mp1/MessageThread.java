@@ -1,3 +1,5 @@
+package mp1;
+
 import java.util.Queue;
 import java.util.Random;
 
