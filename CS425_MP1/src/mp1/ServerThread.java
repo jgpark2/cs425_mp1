@@ -88,42 +88,25 @@ public class ServerThread extends Thread
 			return;
 		}
         
-        /*
-        while(! isStopped()){
-            Socket clientSocket = null;
-            
-            try {
-                clientSocket = this.serverSocket.accept();
-            } catch (IOException e) {
-                if(isStopped()) {
-                    System.out.println("Server Stopped.") ;
-                    return;
-                }
-                throw new RuntimeException("Error accepting client connection", e);
-            }
-            new Thread(  new WorkerRunnable(clientSocket, "Multithreaded Server")  ).start();
-        }
-        System.out.println("Server Stopped.") ;*/
-        
         //m.Question("Whee");
 		finally {
 			try {
-				System.out.println("Connection Closing..");
+				System.out.println("Connection Closing with a client...");
 		        if (ins!=null){
 		            ins.close(); 
-		            System.out.println(" Socket Input Stream Closed");
+		            System.out.println("Socket Input Stream with a Client Closed");
 		        }
 
 		        if(outs!=null){
 		            outs.close();
-		            System.out.println("Socket Out Closed");
+		            System.out.println("Socket Out with a Client Closed");
 		        }
 		        if (clientSocket!=null){
 			        clientSocket.close();
-			        System.out.println("Socket Closed");
+			        System.out.println("Socket with a Client Closed");
 		        }
 		    } catch(IOException ie){
-		        System.out.println("Socket Close Error");
+		        System.out.println("Socket with a Client Close Error");
 		    }
 		}//end finally
     }

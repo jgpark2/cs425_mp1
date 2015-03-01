@@ -136,14 +136,8 @@ public class Node {
 	}
 	
 	public void start() {                
-        //Start the RECV threads
-        //For now, have only 2 servers connect to eachother, A connects to B and vice versa only
-		NodeInfo tempNode;
-		if (myInfo.id.compareTo("A")==0)
-			tempNode = nodesinfo[1];
-		else tempNode = nodesinfo[0];
-		
-		new Thread(new Client(nodesinfo, myInfo, tempNode), "Receiver").start();
+        //Start the Client thread which will eventually spawn 3 RECV threads
+		new Thread(new Client(nodesinfo, myInfo), "Receiver").start();
         
 		
     	int serverPort = myInfo.port;
@@ -167,7 +161,7 @@ public class Node {
         while(true){
             try{
                 socket = serverSocket.accept();
-                System.out.println("Connection established.");
+                System.out.println("Connection established with a client.");
                 ServerThread st=new ServerThread(nodesinfo, myInfo, socket);
                 st.start();
 
