@@ -144,8 +144,6 @@ public class Node {
 		else tempNode = nodesinfo[0];
 		
 		new Thread(new Client(nodesinfo, myInfo, tempNode), "Receiver").start();
-	    
-        //new Thread(new MessageThread(), "Delayer._.").start();
         
 		
     	int serverPort = myInfo.port;
@@ -163,11 +161,11 @@ public class Node {
         }
         
         //Start the SEND thread for each connection
+        //We should keep a list of these sockets...
         Socket socket;
         
         while(true){
             try{
-                //s= ss2.accept();
                 socket = serverSocket.accept();
                 System.out.println("Connection established.");
                 ServerThread st=new ServerThread(nodesinfo, myInfo, socket);
@@ -182,6 +180,5 @@ public class Node {
     	
         
 		//threads = new NodeThreads(nodesinfo);
-		//mt = new MessageThread(threads);
 	}
 }

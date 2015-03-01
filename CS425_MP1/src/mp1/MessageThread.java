@@ -1,9 +1,14 @@
 package mp1;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
 import java.util.Queue;
 import java.util.Random;
 
-public class MessageThread implements Runnable
+public class MessageThread extends Thread
 {
 	//Sends messages after applying delay
 	
@@ -11,10 +16,76 @@ public class MessageThread implements Runnable
 	Queue<Integer> mq; //whatever object we make to hold messages
 	Queue<Long> tq; //queue to hold when a message should be delivered
 	
-	MessageThread(NodeThreads t) {
-		this.t = t;
+	private NodeInfo[] nodesInfo;
+   	private NodeInfo myInfo;
+   	private NodeInfo serverNode;
+   	private Socket client;
+   	
+	protected PrintWriter outs;
+	protected BufferedReader ins;
+	protected BufferedReader sysIn;
+	
+	
+	MessageThread(NodeInfo[] allNodes, NodeInfo curNode, NodeInfo serverNode, Socket mySocket) {
+		nodesInfo = allNodes;
+		myInfo = curNode;
+		this.serverNode = serverNode;
+		client = mySocket;
+    	
+		//this.t = t;
 		//new Thread(this, "Answer").start();
 	}
+	
+	@Override
+	public void run() {
+		String msgInput, msgOutput;
+		
+		//While the server keeps writing to us on its own output Stream...
+		try {
+			
+			outs = new PrintWriter(client.getOutputStream(), true);
+			ins = new BufferedReader(new InputStreamReader(client.getInputStream()));
+			sysIn = new BufferedReader(new InputStreamReader(System.in));
+			
+			
+			while((msgInput = ins.readLine())!=null) {
+				System.out.println("Server: " + msgInput);
+				
+				if (msgInput.equals("Bye")) //Received disconnect Msg
+					break;
+				
+				msgOutput = sysIn.readLine(); //Grab command line input
+				System.out.println("Client: " + msgOutput);
+				outs.println(msgOutput);
+			}
+			
+			
+		} catch (IOException e) {
+			System.out.println("Socket reading error");
+			e.printStackTrace();
+		} finally{
+			try {
+				client.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			try {
+				ins.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			outs.close();
+			try {
+				sysIn.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			System.out.println("Connection Closed");
+	    }	
+		/*while (true)
+			sendQueuedMessages();*/
+	}	
+	
 	
 	public void addMessageToQueue(Integer m) {
 		//input checking: checking for valid receiver
@@ -74,11 +145,6 @@ public class MessageThread implements Runnable
 		}
 	}
 
-	@Override
-	public void run() {
-		// TODO Auto-generated method stub
-		while (true)
-			sendQueuedMessages();
-	}	
+	
 	
 }
