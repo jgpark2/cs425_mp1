@@ -1,7 +1,12 @@
 package mp1;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 public class Node {
 
@@ -130,10 +135,7 @@ public class Node {
 		return 0;
 	}
 	
-	public void start() {        
-        //Start the SEND thread
-        new Thread(new ServerThread(nodesinfo, myInfo), "Sender").start();
-        
+	public void start() {                
         //Start the RECV threads
         //For now, have only 2 servers connect to eachother, A connects to B and vice versa only
 		NodeInfo tempNode;
@@ -142,9 +144,42 @@ public class Node {
 		else tempNode = nodesinfo[0];
 		
 		new Thread(new Client(nodesinfo, myInfo, tempNode), "Receiver").start();
-	      
+	    
         //new Thread(new MessageThread(), "Delayer._.").start();
         
+		
+    	int serverPort = myInfo.port;
+    	ServerSocket serverSocket;
+		//reference: http://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html
+		//http://stackoverflow.com/questions/10131377/socket-programming-multiple-client-to-one-server
+    	System.out.println("Now listening on "+serverPort+"...");
+    	
+        try {
+        	serverSocket = new ServerSocket(serverPort);
+        } catch (IOException e) {
+			System.out.println("Could not listen on port "+serverPort);
+			System.exit(-1);
+			return;
+        }
+        
+        //Start the SEND thread for each connection
+        Socket socket;
+        
+        while(true){
+            try{
+                //s= ss2.accept();
+                socket = serverSocket.accept();
+                System.out.println("Connection established.");
+                ServerThread st=new ServerThread(nodesinfo, myInfo, socket);
+                st.start();
+
+            } catch(Exception e){
+            	e.printStackTrace();
+            	System.out.println("Connection accept failed: "+serverPort);
+            }
+        }
+        //new Thread(new ServerThread(nodesinfo, myInfo), "Sender").start();
+    	
         
 		//threads = new NodeThreads(nodesinfo);
 		//mt = new MessageThread(threads);

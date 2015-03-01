@@ -11,15 +11,19 @@ import java.io.*;
  */
  
  
-public class ServerThread implements Runnable
+public class ServerThread extends Thread
 {
 
 	protected int          serverPort   = 7500;
     protected ServerSocket serverSocket = null;
+    protected Socket		clientSocket = null;
     
     protected boolean      isStopped    = false;
     
     protected Thread       runningThread= null;
+    
+    protected BufferedReader ins = null;
+    protected PrintWriter outs = null;
     
     
 	//run the server thread
@@ -29,13 +33,15 @@ public class ServerThread implements Runnable
     private NodeInfo[] nodesInfo;
 	private NodeInfo myInfo;
 	
-    public ServerThread(NodeInfo[] allNodes, NodeInfo curNode) { 
+    public ServerThread(NodeInfo[] allNodes, NodeInfo curNode, Socket socket) { 
         //this.m = m1;
         //this.serverPort = port;
     	nodesInfo = allNodes;
     	myInfo = curNode;
     	
     	serverPort = myInfo.port;
+    	
+    	clientSocket = socket;
         /*try {
         	localHost = InetAddress.getLocalHost();
 		} catch (UnknownHostException uhe) {
@@ -48,50 +54,27 @@ public class ServerThread implements Runnable
     	/*synchronized(this){
             this.runningThread = Thread.currentThread();
         }*/
+    	
         
-        
-        //reference: http://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html
-        try {
-        	serverSocket = new ServerSocket(serverPort);
-        } catch (IOException e) {
-			System.out.println("Could not listen on port "+serverPort);
-			System.exit(-1);
-			return;
-        }
-        
-        System.out.println("Now listening on "+serverPort+"...");
-        
-        Socket clientSocket;
-        BufferedReader in;
-        PrintWriter out;
-    	//Listen for incoming connection
-    	try {
-			clientSocket = serverSocket.accept();
-		} catch (IOException e) {
-			System.out.println("Accept failed: "+serverPort);
-			System.exit(-1);
-			return;
-		}
-		
 		//Grab the bound socket's input and output streams
 		try {
-			in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-			out = new PrintWriter(clientSocket.getOutputStream(), true);
+			ins = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+			outs = new PrintWriter(clientSocket.getOutputStream(), true);
 		
 		    String msgInput, msgOutput;
 		    
 		    msgOutput = "Tell me anything and I'll repeat it with modification. Say 'Thanks' if you've had enough";
-		    out.println(msgOutput);
+		    outs.println(msgOutput);
 		    
 		    //While client keeps writing to its own output Stream...
-		    while((msgInput = in.readLine())!=null) {
+		    while((msgInput = ins.readLine())!=null) {
 		        
 		    	msgOutput = msgInput + "WHEEEEEEE";
 		    	
 		    	if (msgInput.equals("Thanks"))
 		    		msgOutput = "Bye";
 		    	
-		    	out.println(msgOutput);
+		    	outs.println(msgOutput);
 		    	
 		    	if(msgOutput.equals("Bye")) //Sending disconnect msg
 		    		break;
@@ -123,6 +106,26 @@ public class ServerThread implements Runnable
         System.out.println("Server Stopped.") ;*/
         
         //m.Question("Whee");
+		finally {
+			try {
+				System.out.println("Connection Closing..");
+		        if (ins!=null){
+		            ins.close(); 
+		            System.out.println(" Socket Input Stream Closed");
+		        }
+
+		        if(outs!=null){
+		            outs.close();
+		            System.out.println("Socket Out Closed");
+		        }
+		        if (clientSocket!=null){
+			        clientSocket.close();
+			        System.out.println("Socket Closed");
+		        }
+		    } catch(IOException ie){
+		        System.out.println("Socket Close Error");
+		    }
+		}//end finally
     }
     
     

@@ -18,6 +18,10 @@ public class Client implements Runnable
    	private NodeInfo serverNode;
    	private Socket client;
    	
+   	protected PrintWriter outs;
+	protected BufferedReader ins;
+	protected BufferedReader sysIn;
+   	
     public Client(NodeInfo[] allNodes, NodeInfo curNode, NodeInfo serverNode) {
     	nodesInfo = allNodes;
     	myInfo = curNode;
@@ -31,48 +35,60 @@ public class Client implements Runnable
     }
     
     
-    public void run() {		
-		PrintWriter out;
-		BufferedReader in;
+    public void run(){		
+		
 		
 		//connect to server of given addr and port
 		try {
 			client = new Socket(serverAddr, serverPort);
-			out = new PrintWriter(client.getOutputStream(), true);
-			in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+			outs = new PrintWriter(client.getOutputStream(), true);
+			ins = new BufferedReader(new InputStreamReader(client.getInputStream()));
+			sysIn = new BufferedReader(new InputStreamReader(System.in));
 		} catch (IOException e) {
 			System.out.println("Connect, in, out failed");
-			System.exit(-1);
 			return;
 		}
 		
 		String msgInput, msgOutput;
-		Scanner sc = new Scanner(System.in);
 		
 		System.out.println("Now connected to "+serverAddr+":"+serverPort);
 		
 		//While the server keeps writing to us on its own output Stream...
 		try {
 			
-			
-			while((msgInput = in.readLine())!=null) {
+			while((msgInput = ins.readLine())!=null) {
 				System.out.println("Server: " + msgInput);
 				
-				if (msgInput.equals("Bye")) //Recevied disconnect Msg
+				if (msgInput.equals("Bye")) //Received disconnect Msg
 					break;
 				
-				msgOutput = sc.next();
+				msgOutput = sysIn.readLine(); //Grab command line input
 				System.out.println("Client: " + msgOutput);
-				out.println(msgOutput);
+				outs.println(msgOutput);
 			}
 			
 			
-			
-			
-			client.close();
-			
 		} catch (IOException e) {
+			System.out.println("Socket reading error");
 			e.printStackTrace();
-		}
+		} finally{
+			try {
+				client.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			try {
+				ins.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			outs.close();
+			try {
+				sysIn.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			System.out.println("Connection Closed");
+	    }
 	}
 }
