@@ -16,7 +16,7 @@ public class MessageThread extends Thread
 	//Sends messages after applying delay
 	
 	NodeThreads t;
-	Queue<Integer> mq; //whatever object we make to hold messages
+	Queue<String> mq; //queue to hold a delayed message
 	Queue<Long> tq; //queue to hold when a message should be delivered
 	
 	private NodeInfo[] nodesInfo;
@@ -87,7 +87,9 @@ public class MessageThread extends Thread
 				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
 				Date now = new Date();
 				System.out.println(format.format(now));
+				//addMessageToQueue(msgOutput);
 				outs.println(msgOutput);
+				
 				msgOutput = null;
 				
 			}
@@ -172,7 +174,7 @@ public class MessageThread extends Thread
 	}
 	
 	
-	public void addMessageToQueue(Integer m) {
+	public void addMessageToQueue(String m) {
 		//input checking: checking for valid receiver
 		
 		Long now = System.currentTimeMillis();
@@ -219,11 +221,12 @@ public class MessageThread extends Thread
 		while (true) {
 			if (!mq.isEmpty()) {
 				Long t = tq.peek();
-				if (t >= System.currentTimeMillis()) { //time to send this message
-					Integer m = mq.remove();
+				if (t <= System.currentTimeMillis()) { //time to send this message
+					String m = mq.remove();
 					t = tq.remove();
 					
 					//SEND m
+					outs.println(m);
 				}
 				else break; //no messages need to be send right now
 			}
