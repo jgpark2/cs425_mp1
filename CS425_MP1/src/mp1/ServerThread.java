@@ -2,6 +2,8 @@ package mp1;
 
 import java.net.*;
 import java.io.*;
+import java.util.Date;
+import java.text.SimpleDateFormat;
 
 /*
  * ServerThread.java
@@ -17,6 +19,7 @@ public class ServerThread extends Thread
 	protected int          serverPort   = 7500;
     protected ServerSocket serverSocket = null;
     protected Socket		clientSocket = null;
+    protected String		clientId = "";
     
     protected boolean      isStopped    = false;
     
@@ -63,17 +66,29 @@ public class ServerThread extends Thread
 		
 		    String msgInput, msgOutput;
 		    
+		    while ((msgInput = ins.readLine())==null) {}
+		    clientId = msgInput; //MessageThread:line 57
+		    
 		    msgOutput = "Tell me anything and I'll repeat it with modification. Say 'Thanks' if you've had enough";
 		    outs.println(msgOutput);
 		    
 		    //While client keeps writing to its own output Stream...
 		    while((msgInput = ins.readLine())!=null) {
+		    	Date now = new Date();
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+		    	
+		    	System.out.print("Received \""+msgInput+"\" from " + clientId);
+				System.out.print(", Max delay is " + myInfo.max_delay + " s, ");
+				System.out.println("system time is "+format.format(now));
 		        
 		    	msgOutput = msgInput + "WHEEEEEEE";
 		    	
 		    	if (msgInput.equals("Thanks"))
 		    		msgOutput = "Bye";
 		    	
+		    	System.out.print("Sent \""+msgOutput+"\" to "+clientId+", system time is ");
+				now = new Date();
+				System.out.println(format.format(now));
 		    	outs.println(msgOutput);
 		    	
 		    	if(msgOutput.equals("Bye")) //Sending disconnect msg

@@ -8,6 +8,8 @@ import java.net.Socket;
 import java.util.Queue;
 import java.util.Random;
 import java.io.StringWriter;
+import java.util.Date;
+import java.text.SimpleDateFormat;
 
 public class MessageThread extends Thread
 {
@@ -51,12 +53,20 @@ public class MessageThread extends Thread
 			
 			//sysIn = new BufferedReader(new InputStreamReader(System.in));
 			
+			//send this node's id to server so it can know who it's connected to
+			outs.println(myInfo.id); //gets received in ServerThread:line 70
+			
 			
 			while(true) {
 				System.out.print("Waiting for server");
 				while (msgInput == null) {
 					msgInput = ins.readLine();
-					System.out.println("Server" + serverNode.id+": " + msgInput);
+					Date now = new Date();
+					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+					//System.out.println("Server" + serverNode.id+": " + msgInput);
+					System.out.print("Received \""+msgInput+"\" from " + serverNode.id);
+					System.out.print(", Max delay is " + myInfo.max_delay + " s, ");
+					System.out.println("system time is "+format.format(now));
 				
 					if (msgInput.equals("Bye")) //Received disconnect Msg
 						break;
@@ -68,10 +78,15 @@ public class MessageThread extends Thread
 					System.out.print("Waiting for input");
 					msgOutput = sysIn.readLine(); //Grab command line input
 					msgOutput = parseCommand(msgOutput);
+					//System.out.println("After it's parsed, msgOutput is \""+msgOutput+"\"");
 				}
 				if (msgOutput.compareTo("")==0) //Special case where we read a message our thread doesn't care about
 					continue;
-				System.out.println("Client: " + msgOutput);
+				//System.out.println("Client: " + msgOutput);
+				System.out.print("Sent \""+msgOutput+"\" to "+serverNode.id+", system time is ");
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				Date now = new Date();
+				System.out.println(format.format(now));
 				outs.println(msgOutput);
 				msgOutput = null;
 				
@@ -130,21 +145,6 @@ public class MessageThread extends Thread
 			return null;
 		}
 		
-		
-		id = new StringWriter();
-		int i=0;
-		for (i=0; i<5; i++) //should be "send "
-			id.append(cmd.charAt(i));
-		if (id.toString().compareToIgnoreCase("send ") != 0) {
-			System.out.print("id: \"" + id.toString() + "\"");
-			System.out.println("cmd did not have send");
-			return null;
-		}
-		
-		id = new StringWriter();
-		for (i=5; i<(len-2); i++)
-			id.append(cmd.charAt(i));
-		
 		//Only manage messages that are supposed to be sent to the destination we handle.
 		//Check this last since we want to check this AFTER we know that the destination input is valid to begin with
 		if (id.toString().compareToIgnoreCase(serverNode.id) != 0) {
@@ -152,7 +152,22 @@ public class MessageThread extends Thread
 			//System.out.println(" cmd did not have serverid");
 			return ""; //empty string signifies that this message will be sent by another MessageThread
 		}
-				
+		
+		
+		id = new StringWriter();
+		int i=0;
+		for (i=0; i<5; i++) //should be "send "
+			id.append(cmd.charAt(i));
+		if (id.toString().compareToIgnoreCase("send ") != 0) {
+			//System.out.print("id: \"" + id.toString() + "\"");
+			//System.out.println("cmd did not have send");
+			return null;
+		}
+		
+		id = new StringWriter();
+		for (i=5; i<(len-2); i++)
+			id.append(cmd.charAt(i));
+
 		return id.toString();
 	}
 	
