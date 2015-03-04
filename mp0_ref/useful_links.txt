@@ -4,3 +4,17 @@ http://beej.us/guide/bgnet/output/html/singlepage/bgnet.html
 C++ Multithreading Example:
 http://stackoverflow.com/questions/266168/simple-example-of-threading-in-c
 
+Java Chat Interthreading Example:
+http://www.tutorialspoint.com/java/java_thread_communication.htm
+
+Java.util.Concurrent:
+http://docs.oracle.com/javase/7/docs/api/java/util/concurrent/package-summary.html
+
+Java BlockingQueue Interface:
+http://docs.oracle.com/javase/7/docs/api/java/util/concurrent/BlockingQueue.html
+
+Java Queue Interface:
+http://docs.oracle.com/javase/7/docs/api/java/util/Queue.html
+
+Java Socket Class:
+http://docs.oracle.com/javase/7/docs/api/java/net/Socket.html
