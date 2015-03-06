@@ -2,6 +2,13 @@ Laura Galbraith, galbrth2
 Jonathan Park, jgpark2
 
 Channel Delay Implementation
+For each Node object n, one MessageDelayerThread thread with a BlockingQueue
+is created for each Node object that n needs to send messages to.
+Messages that n wants to send to another particular Node are added to the
+BlockingQueue. MessageDelayerThread removes each message from the BlockingQueue
+and sleeps until the time has come equal to that message's timestamp
+(some random delay added to the time the message was added to the BlockingQueue).
+The MessageDelayerThread then sends the message along the socket connection to the other Node.
 
 Consistency Models Implementations
 Linearizability
