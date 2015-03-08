@@ -6,11 +6,13 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.concurrent.ArrayBlockingQueue;
 
 /*
  * CentralServer: represents the central leader in our distributed system
- * Holds 1 ConnectionCreaterThread
- *       4 MessageRouterThread (1 receiving from every node)
+ * Holds 1 MessageRouterThread
+ *       4 MessageRelayThread (1 receiving from every node)
  *       4 MessageSenderThread (1 sending to every node)
  */
 public class CentralServer {
@@ -19,10 +21,12 @@ public class CentralServer {
 	//Made a separate Nodeinfo for centralserver, add to parseconfig
 
 	private ServerSocket server;
+	private ArrayBlockingQueue<MessageType> mqin;
+	private int mqmax = 1023;
 	
-	private ConnectionCreaterThread creater; //this will create the MessageSenderThreads on Socket connection
-	private MessageRouterThread [] routers; //spawned from CentralServer
-	private MessageSenderThread [] senders; //spawned from ConnectionCreaterThread
+	private MessageRouterThread router; //this will create the MessageSenderThreads on Socket connection
+	private MessageRelayThread [] relayers; //spawned from CentralServer
+	private MessageSenderThread [] senders; //spawned from MessageRouterThread
 
 	
 	public static void main(String[] args) {
@@ -121,15 +125,17 @@ public class CentralServer {
 
 	private void start() {
 		
-		routers = new MessageRouterThread[4];
+		relayers = new MessageRelayThread[4];
         senders = new MessageSenderThread[4];
         for (int i=0; i<4; i++) {
-        	routers[i] = null;
+        	relayers[i] = null;
         	senders[i] = null;
         }
+        
+        mqin = new ArrayBlockingQueue<MessageType>(mqmax);
 
-		//Start the ConnectionCreaterThread thread that will eventually spawn 3 MessageSenderThread Threads (sockets)
-        creater = new ConnectionCreaterThread(this);
+		//Start the MessageRouterThread thread that will eventually spawn 3 MessageSenderThread Threads (sockets)
+        router = new MessageRouterThread(this, mqin, mqmax);
     	
         try {
 			server = new ServerSocket(7600); //at the centralserver port
@@ -146,7 +152,7 @@ public class CentralServer {
         while(count < 4){
             try{
             	socket = server.accept();
-                new MessageRouterThread(this, socket); //make separate constructor
+                new MessageRelayThread(this, socket, mqin);
 				count++;
             } catch(Exception e){
             	System.out.println("Connection accept failed");
@@ -158,10 +164,10 @@ public class CentralServer {
 	
 	
 	//This methods are used to fill in the Socket arrays once a connections is initialized
-	public void setReceivingThreadIndex(int idx, MessageRouterThread router) {
-		if ((idx < 0) || (idx > 3) || (router == null))
+	public void setReceivingThreadIndex(int idx, MessageRelayThread relayer) {
+		if ((idx < 0) || (idx > 3) || (relayer == null))
 			return;
-		routers[idx] = router;
+		relayers[idx] = relayer;
 	}
 		
 	public void setSendingThreadIndex(int idx, MessageSenderThread sender) {
@@ -170,10 +176,10 @@ public class CentralServer {
 		senders[idx] = sender;
 	}
 			
-	public MessageRouterThread getReceivingThread(int idx) {
+	public MessageRelayThread getReceivingThread(int idx) {
 		if ((idx < 0) || (idx > 3))
 			return null;
-		return routers[idx];
+		return relayers[idx];
 	}
 			
 	public MessageSenderThread getSendingThread(int idx) {
@@ -182,8 +188,8 @@ public class CentralServer {
 		return senders[idx];
 	}
 			
-	public ConnectionCreaterThread getConnectionCreaterThread() {
-		return creater;
+	public MessageRouterThread getConnectionRouterThread() {
+		return router;
 	}
 			
 			

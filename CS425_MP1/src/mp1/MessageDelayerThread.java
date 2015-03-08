@@ -56,7 +56,7 @@ public class MessageDelayerThread extends Thread {
 		//send myIdx to the MessageReceiverThread on the other end
 		outs.println(myIdx);
     	
-		try{
+		try {
             MessageType msg;
             //consuming messages until exit message is received
             while((msg = mq.take()).msg.compareToIgnoreCase("exit") != 0) {
@@ -68,7 +68,7 @@ public class MessageDelayerThread extends Thread {
             	outs.println(msg.msg);
             }
             outs.println(msg.msg);
-        }catch(InterruptedException e) {
+        } catch(InterruptedException e) {
             e.printStackTrace();
         }
 		
