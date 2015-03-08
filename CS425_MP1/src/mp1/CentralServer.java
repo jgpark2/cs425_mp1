@@ -10,7 +10,7 @@ import java.net.Socket;
 /*
  * CentralServer: represents the central leader in our distributed system
  * Holds 1 ConnectionCreaterThread
- *       4 MessageReceiverThread (1 receiving from every node)
+ *       4 MessageRouterThread (1 receiving from every node)
  *       4 MessageSenderThread (1 sending to every node)
  */
 public class CentralServer {
@@ -21,7 +21,7 @@ public class CentralServer {
 	private ServerSocket server;
 	
 	private ConnectionCreaterThread creater; //this will create the MessageSenderThreads on Socket connection
-	private MessageReceiverThread [] receivers; //spawned from CentralServer
+	private MessageRouterThread [] routers; //spawned from CentralServer
 	private MessageSenderThread [] senders; //spawned from ConnectionCreaterThread
 
 	
@@ -121,10 +121,10 @@ public class CentralServer {
 
 	private void start() {
 		
-		receivers = new MessageReceiverThread[4];
+		routers = new MessageRouterThread[4];
         senders = new MessageSenderThread[4];
         for (int i=0; i<4; i++) {
-        	receivers[i] = null;
+        	routers[i] = null;
         	senders[i] = null;
         }
 
@@ -146,7 +146,7 @@ public class CentralServer {
         while(count < 4){
             try{
             	socket = server.accept();
-                new MessageReceiverThread(this, socket); //make separate constructor
+                new MessageRouterThread(this, socket); //make separate constructor
 				count++;
             } catch(Exception e){
             	System.out.println("Connection accept failed");
@@ -158,10 +158,10 @@ public class CentralServer {
 	
 	
 	//This methods are used to fill in the Socket arrays once a connections is initialized
-	public void setReceivingThreadIndex(int idx, MessageReceiverThread receiver) {
-		if ((idx < 0) || (idx > 3) || (receiver == null))
+	public void setReceivingThreadIndex(int idx, MessageRouterThread router) {
+		if ((idx < 0) || (idx > 3) || (router == null))
 			return;
-		receivers[idx] = receiver;
+		routers[idx] = router;
 	}
 		
 	public void setSendingThreadIndex(int idx, MessageSenderThread sender) {
@@ -170,10 +170,10 @@ public class CentralServer {
 		senders[idx] = sender;
 	}
 			
-	public MessageReceiverThread getReceivingThread(int idx) {
+	public MessageRouterThread getReceivingThread(int idx) {
 		if ((idx < 0) || (idx > 3))
 			return null;
-		return receivers[idx];
+		return routers[idx];
 	}
 			
 	public MessageSenderThread getSendingThread(int idx) {

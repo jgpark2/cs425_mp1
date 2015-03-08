@@ -14,6 +14,10 @@ import java.net.Socket;
  * Holds 1 CommandInputThread
  *       3 MessageReceiverThread (1 receiving from every other node)
  *       3 MessageDelayerThread (1 delaying for every other node)
+ * - or with CentralServer -
+ * Holds 1 CommandInputThread
+ *       1 MessageReceiverThread, from CentralServer
+ *       1 MessageDelayerThread, to CentralServer
  */
 public class Node {
 
@@ -26,11 +30,10 @@ public class Node {
 	private CommandInputThread cmdin;
 	private MessageReceiverThread [] receivers;
 	private MessageDelayerThread [] senders;
+	
+	private MessageReceiverThread fromLeader;
+	private MessageDelayerThread toLeader;
 
-	private NodeThreads threads;
-	private ServerThread st;
-	//private ClientThread ct;
-	private MessageThread mt;
 	
 	public static void main(String[] args) throws Exception
 	{
@@ -160,42 +163,26 @@ public class Node {
         	senders[i] = null;
         }
 
-
-        //Start the Client thread which will eventually spawn 3 RECV threads
-//		new Thread(new Client(nodesinfo, myInfo), "Receiver").start();
 		//Start the CommandInputThread thread that will eventually spawn 3 MessageDelayerThread Threads (sockets)
         cmdin = new CommandInputThread(this);
         
-		
-//    	int serverPort = myInfo.port;
-//    	ServerSocket serverSocket;
-		//reference: http://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html
-		//http://stackoverflow.com/questions/10131377/socket-programming-multiple-client-to-one-server
-//    	System.out.println("Now listening on "+serverPort+"...");
-    	
         try {
-//        	serverSocket = new ServerSocket(serverPort);
 			server = new ServerSocket(nodesinfo[myIdx].port);
         } catch (IOException e) {
-//			System.out.println("Could not listen on port "+serverPort);
 			System.out.println("Could not listen on port " + nodesinfo[myIdx].port);
 			e.printStackTrace();
 			System.exit(-1);
 			return;
         }
         
+/*		//Without the CentralServer
         //Start the SEND thread for each connection
-        //We should keep a list of these sockets...
         Socket socket;
 		int count = 0;
 
         while(count < 3){
             try{
             	socket = server.accept();
-//              socket = serverSocket.accept();
-//              System.out.println("Connection established with a client.");
-//              ServerThread st=new ServerThread(nodesinfo, myInfo, socket);
-//              st.start();
                 new MessageReceiverThread(this, socket);
 				count++;
             } catch(Exception e){
@@ -203,71 +190,77 @@ public class Node {
 				e.printStackTrace();
             }
         }
-        //new Thread(new ServerThread(nodesinfo, myInfo), "Sender").start();
-    	
-        
-		//threads = new NodeThreads(nodesinfo);
+*/
+        //With the CentralServer
+        Socket socket;
+        try {
+        	socket = server.accept();
+        	new MessageReceiverThread(this, socket);
+        } catch (Exception e) {
+        	System.out.println("Connection accept with CentralServer failed");
+			e.printStackTrace();
+        }
 
 	}
 	
 	
 	//This methods are used to fill in the Socket arrays once a connections is initialized
-		public void setReceivingThreadIndex(int idx, MessageReceiverThread receiver) {
-			if ((idx < 0) || (idx > 3) || (receiver == null))
-				return;
-			receivers[idx] = receiver;
-		}
+	public void setReceivingThreadIndex(int idx, MessageReceiverThread receiver) {
+		if ((idx < 0) || (idx > 3) || (receiver == null))
+			return;
+		receivers[idx] = receiver;
+	}
 		
-		public void setSendingThreadIndex(int idx, MessageDelayerThread delayer) {
-			if ((idx < 0) || (idx > 3) || (delayer == null))
-				return;
-			senders[idx] = delayer;
-		}
+	public void setSendingThreadIndex(int idx, MessageDelayerThread delayer) {
+		if ((idx < 0) || (idx > 3) || (delayer == null))
+			return;
+		senders[idx] = delayer;
+	}
 		
-		public MessageReceiverThread getReceivingThread(int idx) {
-			if ((idx < 0) || (idx > 3) || (idx == myIdx))
-				return null;
-			return receivers[idx];
-		}
+	public MessageReceiverThread getReceivingThread(int idx) {
+		if ((idx < 0) || (idx > 3) || (idx == myIdx))
+			return null;
+		return receivers[idx];
+	}
 		
-		public MessageDelayerThread getSendingThread(int idx) {
-			if ((idx < 0) || (idx > 3) || (idx == myIdx))
-				return null;
-			return senders[idx];
-		}
+	public MessageDelayerThread getSendingThread(int idx) {
+		if ((idx < 0) || (idx > 3) || (idx == myIdx))
+			return null;
+		return senders[idx];
+	}
 		
-		public CommandInputThread getCommandInputThread() {
-			return cmdin;
-		}
+	public CommandInputThread getCommandInputThread() {
+		return cmdin;
+	}
 		
 		
-		public NodeInfo [] getNodesInfo() {
-			return nodesinfo;
-		}
+	public NodeInfo [] getNodesInfo() {
+		return nodesinfo;
+	}
 		
 
-		public int getIndexFromId(String id) {
-			int i = -1;
-			if (id.compareToIgnoreCase("a") == 0)
-				i = 0;
-			else if (id.compareToIgnoreCase("b") == 0)
-				i = 1;
-			else if (id.compareToIgnoreCase("c") == 0)
-				i = 2;
-			else if (id.compareToIgnoreCase("d") == 0)
-				i = 3;
-				
-			return i;
-		}
+	public int getIndexFromId(String id) {
+		int i = -1;
+		if (id.compareToIgnoreCase("a") == 0)
+			i = 0;
+		else if (id.compareToIgnoreCase("b") == 0)
+			i = 1;
+		else if (id.compareToIgnoreCase("c") == 0)
+			i = 2;
+		else if (id.compareToIgnoreCase("d") == 0)
+			i = 3;
+			
+		return i;
+	}
 		
 		
-		public void setDefaultNodesInfo() {
-			nodesinfo = new NodeInfo[4];
-			for (int i=0; i<4; i++) {
-				nodesinfo[i] = new NodeInfo();
-				nodesinfo[i].id = "nosocket";
-				nodesinfo[i].max_delay = 7.0;
-			}
+	public void setDefaultNodesInfo() {
+		nodesinfo = new NodeInfo[4];
+		for (int i=0; i<4; i++) {
+			nodesinfo[i] = new NodeInfo();
+			nodesinfo[i].id = "nosocket";
+			nodesinfo[i].max_delay = 7.0;
 		}
+	}
 	
 }
