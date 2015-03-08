@@ -21,11 +21,11 @@ public class CentralServer {
 	//Made a separate Nodeinfo for centralserver, add to parseconfig
 
 	private ServerSocket server;
-	private ArrayBlockingQueue<MessageType> mqin;
+	private ArrayBlockingQueue<String> mqin;
 	private int mqmax = 1023;
 	
 	private MessageRouterThread router; //this will create the MessageSenderThreads on Socket connection
-	private MessageRelayThread [] relayers; //spawned from CentralServer
+	private MessageRelayThread [] receivers; //spawned from CentralServer
 	private MessageSenderThread [] senders; //spawned from MessageRouterThread
 
 	
@@ -125,14 +125,14 @@ public class CentralServer {
 
 	private void start() {
 		
-		relayers = new MessageRelayThread[4];
+		receivers = new MessageRelayThread[4];
         senders = new MessageSenderThread[4];
         for (int i=0; i<4; i++) {
-        	relayers[i] = null;
+        	receivers[i] = null;
         	senders[i] = null;
         }
         
-        mqin = new ArrayBlockingQueue<MessageType>(mqmax);
+        mqin = new ArrayBlockingQueue<String>(mqmax);
 
 		//Start the MessageRouterThread thread that will eventually spawn 3 MessageSenderThread Threads (sockets)
         router = new MessageRouterThread(this, mqin, mqmax);
@@ -164,10 +164,10 @@ public class CentralServer {
 	
 	
 	//This methods are used to fill in the Socket arrays once a connections is initialized
-	public void setReceivingThreadIndex(int idx, MessageRelayThread relayer) {
-		if ((idx < 0) || (idx > 3) || (relayer == null))
+	public void setReceivingThreadIndex(int idx, MessageRelayThread receiver) {
+		if ((idx < 0) || (idx > 3) || (receiver == null))
 			return;
-		relayers[idx] = relayer;
+		receivers[idx] = receiver;
 	}
 		
 	public void setSendingThreadIndex(int idx, MessageSenderThread sender) {
@@ -179,7 +179,7 @@ public class CentralServer {
 	public MessageRelayThread getReceivingThread(int idx) {
 		if ((idx < 0) || (idx > 3))
 			return null;
-		return relayers[idx];
+		return receivers[idx];
 	}
 			
 	public MessageSenderThread getSendingThread(int idx) {

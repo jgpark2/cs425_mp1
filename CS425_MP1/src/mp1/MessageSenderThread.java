@@ -15,10 +15,10 @@ public class MessageSenderThread extends Thread {
 	private int myIdx;
 	
 	private Socket socket;
-	private ArrayBlockingQueue<MessageType> mqout;
+	private ArrayBlockingQueue<String> mqout;
 
 	public MessageSenderThread(CentralServer centralServer,
-			ArrayBlockingQueue<MessageType> mqout, int i,
+			ArrayBlockingQueue<String> mqout, int i,
 			Socket servconn) {
 		
 		this.centralServer = centralServer;

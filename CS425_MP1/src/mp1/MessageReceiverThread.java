@@ -38,7 +38,7 @@ public class MessageReceiverThread extends Thread {
 		try {
 			ins = new BufferedReader(new InputStreamReader(client.getInputStream()));
 		} catch (IOException e) {
-			System.out.println("Could not initialize socket streams");
+			System.out.println("Could not initialize socket stream");
 			e.printStackTrace();
 			try {
 				client.close();
