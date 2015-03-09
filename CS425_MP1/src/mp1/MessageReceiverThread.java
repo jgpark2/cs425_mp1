@@ -49,19 +49,19 @@ public class MessageReceiverThread extends Thread {
 				
 				//TODO: respond to these separately
 				//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
-				if (input.lastIndexOf("get ") > 0) {
+				if (input.lastIndexOf("get ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
 				//delete key <requestingnodeid> <reqorack> <timestamp>
-				else if (input.lastIndexOf("delete ") > 0) {
+				else if (input.lastIndexOf("delete ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
 				//insert key value model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
-				else if (input.lastIndexOf("insert ") > 0) {
+				else if (input.lastIndexOf("insert ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
 				//update key value model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
-				else if (input.lastIndexOf("update ") > 0) {
+				else if (input.lastIndexOf("update ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
 

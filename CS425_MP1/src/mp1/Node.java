@@ -20,7 +20,6 @@ import java.net.Socket;
 public class Node {
 
 	private NodeInfo[] nodesinfo;
-	private NodeInfo myInfo;
 	public int myIdx; //index into NodeInfo array
 
 	private ServerSocket server;
@@ -90,7 +89,6 @@ public class Node {
 				
 				if (str.toString().compareTo(id)==0) {
 					System.out.println("Identified this node as "+str.toString());
-					myInfo = nodesinfo[i];
 					myIdx = i;
 				}
 				
