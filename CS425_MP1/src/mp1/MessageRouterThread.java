@@ -17,7 +17,6 @@ public class MessageRouterThread extends Thread {
 	
 	private CentralServer centralServer;
 	private NodeInfo [] nodesinfo;
-	private NodeInfo leaderInfo;
 
 	private ArrayBlockingQueue<String> mqin;
 	private ArrayList< ArrayBlockingQueue<MessageType> > mqoutarr;
@@ -34,7 +33,6 @@ public class MessageRouterThread extends Thread {
 			ArrayBlockingQueue<String> mqin, int mqmax) {
 		this.centralServer = centralServer;
 		nodesinfo = centralServer.getNodesInfo();
-		leaderInfo = centralServer.leaderInfo;
 		this.mqin = mqin;
 		this.mqmax = mqmax;
 		
@@ -138,23 +136,14 @@ public class MessageRouterThread extends Thread {
 		//TODO: finish parsing this exactly
 		ArrayList<Integer> ret = new ArrayList<Integer>();
 		
-		for (int i=0; i<4; i++) {
-			ret.add(new Integer(i));
-		}
-		
 		//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 		if (msg.substring(0, 4).compareToIgnoreCase("get ") == 0) {
-//			int i = 3; //starting index into message
-//			
-//			while (msg.charAt(i) == ' ') //move past spaces between get,key
-//				i++;
-//			while (msg.charAt(i) != ' ') //move past key
-//				i++;
-//			while (msg.charAt(i) == ' ') //move past spaces between key,model
-//				i++;
-//			while (msg.charAt(i) != ' ') //move past model
-//				i++;
-			//msg.charAt(i) is now the space between model and other data
+
+			//At the moment, all get messages that go through CentralServer are requests
+			//(sequential consistency and linearizability need no acks, but do need own req)
+			for (int i=0; i<4; i++) {
+				ret.add(new Integer(i));
+			}
 		}
 		
 		//delete key <requestingnodeid> <reqorack> <timestamp>
@@ -162,12 +151,12 @@ public class MessageRouterThread extends Thread {
 			
 		}
 		
-		//insert key value model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
+		//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("insert ") == 0) {
 			
 		}
 		
-		//update key value model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
+		//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("update ") == 0) {
 			
 		}

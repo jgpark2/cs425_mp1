@@ -11,7 +11,6 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 
 /*
  * CommandInputThread: 1 per Node object
@@ -180,11 +179,29 @@ public class CommandInputThread extends Thread {
 	
 	
 	/*
+	 * Calculates the random delay, gives message to correct MessageDelayerThread
+	 */
+	public void addMessageToNodeQueue(MessageType msg, int recvIdx) {
+		//Calculate random delay
+		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
+				
+		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
+		msg.ts = new Long(Math.max(msg.ts + (long)randint, last[recvIdx].ts.longValue()));
+			
+		try {
+			mqnodearr.get(recvIdx).put(msg);
+			last[recvIdx] = msg;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+	/*
 	 * Take command and check number of arguments
 	 * Returns an integer indicating which type of message it is
 	 */
 	private int parseForIncorrectFormat(MessageType msg) {
-		//TODO Implement all error checking
 		
 		System.out.println("Entering parseForIncorrectFormat, msg is "+msg.msg);
 		int type = -1;
@@ -334,7 +351,10 @@ public class CommandInputThread extends Thread {
 	private void parseDelete(MessageType msg) {
 		//We want to send this out even if this Node has no replica of the key
 
-		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + "req";
+		//This format of the message represents a unique identifier for the request
+		msg.msg = msg.msg + " " + nodesinfo[myIdx].id;
+		node.recvacks.put(msg.msg, 3);
+		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 	
@@ -344,40 +364,68 @@ public class CommandInputThread extends Thread {
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
 	 * This method assumes that parseForIncorrectFormat has already been called
-	 * final format: get key model <requestingnodeid> <requestnumber> <value> <reqorack>
+	 * final format: get key model <requestingnodeid> <requestnumber> <reqorack>
 	 */
 	private void parseGet(MessageType msg) {
-		//Extract model out of get
+		//Extract model out of msg
 		String modelstr = msg.msg.substring(msg.msg.length()-1);
 		int model = Integer.parseInt(modelstr);
+		
+		node.reqcnt++;
 		
 		switch (model) {
 			case 1: {
 				//linearizability: send to CentralServer, wait for req to be received
+				
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, 1);
+				msg.msg = msg.msg + " " + "req";
+				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				break;
 			}
+			
 			case 2: {
-				//TODO: print out our own replica of this data
-				return;
+				//sequential consistency: print out our own replica of this data
+				
+				//Extract key out of msg
+				String key = msg.msg.substring(4, msg.msg.length()-2);
+				Datum value = node.sharedData.get(key);
+				System.out.println("get("+key+") = "+value.value);
+				break;
 			}
+			
 			case 3: {
+				//eventual consistency, R=1: read 1 replica (ours)
 				
+				//Extract key out of msg
+				String key = msg.msg.substring(4, msg.msg.length()-2);
+				Datum value = node.sharedData.get(key);
+				
+				System.out.print("get("+key+") = ("+value.value+", ");
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				Date curdate = new Date(value.timestamp);
+				System.out.println(format.format(curdate) + ")");
+				break;
 			}
+			
 			case 4: {
+				//eventual consistency, R=2: send to 1 other Nodes, wait for 1 ack
 				
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, 1);
+				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+				addMessageToNodeQueue(msg, (myIdx + 1)%4);
+				break;
 			}
+			
 			default: {
 				System.out.println("Message was not correctly fomatted; try again");
 				return;
 			}
 		}
 		
-		node.reqcnt++;
-		//This format of the message represents a unique identifier for the request
-		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-		node.recvacks.put(msg.msg, 0);
-		msg.msg = msg.msg + " " + "req";
-		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 
 
@@ -386,14 +434,77 @@ public class CommandInputThread extends Thread {
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
 	 * This method assumes that parseForIncorrectFormat has already been called
+	 * final format: insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseInsert(MessageType msg) {
-		// TODO Auto-generated method stub
-		try {
-			mqleader.put(msg.msg);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		//Extract model out of msg
+		String modelstr = msg.msg.substring(msg.msg.length()-1);
+		int model = Integer.parseInt(modelstr);
+		
+		node.reqcnt++;
+		
+		switch (model) {
+			case 1: {
+				//linearizability: send to CentralServer, wait for 3 acks to be received
+				break;
+			}
+			
+			case 2: {
+				//sequential consistency: send to CentralServer, wait for 3 acks to be received
+				break;
+			}
+			
+			case 3: {
+				//eventual consistency, W=1: send to 1 replica (ours)
+				
+				//Extract key out of msg
+				StringBuilder builder = new StringBuilder();
+				int i = 7;
+				while (msg.msg.charAt(i) != ' ') { //move through key
+					builder.append(msg.msg.charAt(i));
+					i++;
+				}
+				String key = builder.toString();
+				
+				//Extract value out of msg
+				builder = new StringBuilder();
+				i++; //move past space between key and value
+				while (msg.msg.charAt(i) != ' ') { //move through value
+					builder.append(msg.msg.charAt(i));
+					i++;
+				}
+				String value = builder.toString();
+				
+				Datum toinsert = new Datum(value, msg.ts.longValue());
+				node.sharedData.put(key, toinsert);
+				System.out.println("Inserted key "+key);
+				return;
+			}
+			
+			case 4: {
+				//eventual consistency, W=2: send to 1 other Node, wait for 1 ack
+				
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, 1);
+				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+				addMessageToNodeQueue(msg, (myIdx + 1)%4);
+				return;
+			}
+			
+			default: {
+				System.out.println("Message was not correctly fomatted; try again");
+				return;
+			}
 		}
+		
+		//Both linearizability and sequential consistency run this:
+		//This format of the message represents a unique identifier for the request
+		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+		node.recvacks.put(msg.msg, 3);
+		msg.msg = msg.msg + " " + "req";
+		addMessageToLeaderQueue(msg); //this method adds the timestamp
+		
 	}
 
 
@@ -402,14 +513,76 @@ public class CommandInputThread extends Thread {
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
 	 * This method assumes that parseForIncorrectFormat has already been called
+	 * final format: update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseUpdate(MessageType msg) {
-		// TODO Auto-generated method stub
-		try {
-			mqleader.put(msg.msg);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		//Extract model out of msg
+		String modelstr = msg.msg.substring(msg.msg.length()-1);
+		int model = Integer.parseInt(modelstr);
+				
+		node.reqcnt++;
+				
+		switch (model) {
+			case 1: {
+				//linearizability: send to CentralServer, wait for 3 acks to be received
+				break;
+			}
+					
+			case 2: {
+				//sequential consistency: send to CentralServer, wait for 3 acks to be received
+				break;
+			}
+					
+			case 3: {
+				//eventual consistency, W=1: send to 1 replica (ours)
+				
+				//Extract key out of msg
+				StringBuilder builder = new StringBuilder();
+				int i = 7;
+				while (msg.msg.charAt(i) != ' ') { //move through key
+					builder.append(msg.msg.charAt(i));
+					i++;
+				}
+				String key = builder.toString();
+						
+				//Extract value out of msg
+				builder = new StringBuilder();
+				i++; //move past space between key and value
+				while (msg.msg.charAt(i) != ' ') { //move through value
+					builder.append(msg.msg.charAt(i));
+					i++;
+				}
+				String value = builder.toString();
+						
+				Datum toinsert = new Datum(value, msg.ts.longValue());
+				Datum old = node.sharedData.put(key, toinsert);
+				System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				return;
+			}
+					
+			case 4: {
+				//eventual consistency, W=2: send to 1 other Node, wait for 1 ack
+				
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, 1);
+				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+				addMessageToNodeQueue(msg, (myIdx + 1)%4);
+				return;
+			}
+					
+			default: {
+				System.out.println("Message was not correctly fomatted; try again");
+				return;
+			}
 		}
+				
+		//Both linearizability and sequential consistency run this:
+		//This format of the message represents a unique identifier for the request
+		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+		node.recvacks.put(msg.msg, 3);
+		msg.msg = msg.msg + " " + "req";
+		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 	
 	
@@ -432,24 +605,12 @@ public class CommandInputThread extends Thread {
 		for (int i=5; i<(len-2); i++)
 			writer.append(cmd.msg.charAt(i));
 		cmd.msg = writer.toString();
-
-		//Calculate random delay
-		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
 		
-		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
-		cmd.ts = new Long(Math.max(cmd.ts + (long)randint, last[recvIdx].ts.longValue()));
-		
-		try {
-			mqnodearr.get(recvIdx).put(cmd);
-			last[recvIdx] = cmd;
-			System.out.print("Sent \""+cmd.msg+"\" to "+nodesinfo[recvIdx].id+", system time is ");
-			SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
-			Date curdate = new Date();
-			System.out.println(format.format(curdate));
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-		
+		addMessageToNodeQueue(cmd, recvIdx);
+		System.out.print("Sent \""+cmd.msg+"\" to "+nodesinfo[recvIdx].id+", system time is ");
+		SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+		Date curdate = new Date();
+		System.out.println(format.format(curdate));
 	}
 	
 	

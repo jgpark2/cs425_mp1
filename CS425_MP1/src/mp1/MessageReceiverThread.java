@@ -56,11 +56,11 @@ public class MessageReceiverThread extends Thread {
 				else if (input.lastIndexOf("delete ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
-				//insert key value model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
+				//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 				else if (input.lastIndexOf("insert ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
-				//update key value model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
+				//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 				else if (input.lastIndexOf("update ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}

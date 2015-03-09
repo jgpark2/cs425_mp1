@@ -20,3 +20,7 @@ Java Socket Class:
 http://docs.oracle.com/javase/7/docs/api/java/net/Socket.html
 
 Piazza post about format of output from Nodes: @126
+
+Piazza post about why we don't need delay to CentralServer: @156
+
+Piazza post about eventual consistency numbers and delete spec: @236

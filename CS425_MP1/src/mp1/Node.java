@@ -3,13 +3,11 @@ package mp1;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /*
@@ -27,7 +25,7 @@ public class Node {
 	
 	//Number of consistency model requests made by this Node
 	public int reqcnt = 0;
-	//Map that tracks how many acks we have received for a request
+	//Map that tracks how many acks we HAVE YET TO RECEIVE for a message
 	public ConcurrentHashMap<String, Integer> recvacks;
 
 	private ServerSocket server;
@@ -170,12 +168,12 @@ public class Node {
 			}
 		}
 		
-		for (int i=0; i<4; i++) { //test that node info is correct
-			System.out.print("Node " + nodesinfo[i].id + ": ");
-			System.out.print("IP: " + nodesinfo[i].ip + " ");
-			System.out.print("Port: " + nodesinfo[i].port + " ");
-			System.out.println("Max delay: " + nodesinfo[i].max_delay);
-		}
+//		for (int i=0; i<4; i++) { //test that node info is correct
+//			System.out.print("Node " + nodesinfo[i].id + ": ");
+//			System.out.print("IP: " + nodesinfo[i].ip + " ");
+//			System.out.print("Port: " + nodesinfo[i].port + " ");
+//			System.out.println("Max delay: " + nodesinfo[i].max_delay);
+//		}
 		return 0;
 	}
 	

@@ -135,12 +135,12 @@ public class CentralServer {
 			}
 		}
 		
-		for (int i=0; i<4; i++) { //test that node info is correct
-			System.out.print("Node " + nodesinfo[i].id + ": ");
-			System.out.print("IP: " + nodesinfo[i].ip + " ");
-			System.out.print("Port: " + nodesinfo[i].port + " ");
-			System.out.println("Max delay: " + nodesinfo[i].max_delay);
-		}
+//		for (int i=0; i<4; i++) { //test that node info is correct
+//			System.out.print("Node " + nodesinfo[i].id + ": ");
+//			System.out.print("IP: " + nodesinfo[i].ip + " ");
+//			System.out.print("Port: " + nodesinfo[i].port + " ");
+//			System.out.println("Max delay: " + nodesinfo[i].max_delay);
+//		}
 		
 		return 0;
 	}
