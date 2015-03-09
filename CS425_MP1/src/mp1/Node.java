@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /*
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Node {
 
 	private NodeInfo[] nodesinfo;
+	private NodeInfo leaderInfo;
 	public int myIdx; //index into NodeInfo array
 	
 	//Number of consistency model requests made by this Node
@@ -37,6 +39,7 @@ public class Node {
 	private MessageReceiverThread fromLeader;
 	private MessageSenderThread toLeader;
 
+	public ConcurrentHashMap<String, Datum> sharedData;
 	
 	public static void main(String[] args) throws Exception
 	{
@@ -63,6 +66,7 @@ public class Node {
 	private int parseConfig(String[] args)
 	{
 		nodesinfo = new NodeInfo[4];
+		leaderInfo = new NodeInfo();
 		
 		
 		for (int i=0; i<4; i++)
@@ -135,6 +139,25 @@ public class Node {
 				str = new StringWriter();
 				nodesinfo[i].max_delay = mddouble.doubleValue();
 			}
+			
+			//Central server node
+			str = new StringWriter();
+			content = fis.read(); //node id
+			str.write(content);
+			leaderInfo.id = str.toString();
+			str = new StringWriter();
+			content = fis.read(); //,
+			while ((char)(content = fis.read()) != '\n') //node ip
+				str.write(content);
+			leaderInfo.ip = str.toString();
+			str = new StringWriter();
+			content = fis.read(); //node id
+			content = fis.read(); //,
+			while ((char)(content = fis.read()) != '\n') //node port
+				str.write(content);
+			Integer portnumint = new Integer(str.toString());
+			str = new StringWriter();
+			leaderInfo.port = portnumint.intValue();
 			
 		} catch (Exception e) { //if config file can't be parsed, exit
 			e.printStackTrace();
@@ -266,4 +289,25 @@ public class Node {
 		}
 	}
 	
+	//Removes value at key and returns the removed value (Datum)
+	public Datum delete(String key){
+		return sharedData.remove(key);
+	}
+	
+	public Datum get(String key){
+		return sharedData.get(key);
+	}
+
+	//Adds new entry if nonexistent, otherwise updates existing key-val
+	public Datum insert(String key, Datum val){
+		if (sharedData.containsKey(key))
+			return sharedData.put(key, val);
+		else
+			return update(key,val);
+	}
+	
+	//updates existing key-val
+	public Datum update(String key, Datum val){
+		return sharedData.replace(key, val);
+	}
 }
