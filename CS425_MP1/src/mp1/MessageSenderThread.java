@@ -50,7 +50,7 @@ public class MessageSenderThread extends Thread {
 			return;
 		}
 		
-		//send myIdx to the MessageRelayerThread on the other end (at the CentralServer)
+		//send myIdx to the MessageRelayThread on the other end (at the CentralServer)
 		outs.println(myIdx);
 		
 		try {

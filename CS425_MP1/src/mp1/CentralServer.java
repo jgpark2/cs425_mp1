@@ -156,7 +156,7 @@ public class CentralServer {
             	socket = server.accept();
             	BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             	String input = "";
-    			while ((input = in.readLine())==null) {} //get recvIdx from client
+    			while ((input = in.readLine())==null) {} //get recvIdx from MessageSenderThread
     			int idx = Integer.parseInt(input);
     			setReceivingThreadIndex(idx, new MessageRelayThread(this, socket, in, mqin));
     			

@@ -11,6 +11,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 /*
  * CommandInputThread: 1 per Node object
@@ -163,8 +164,22 @@ public class CommandInputThread extends Thread {
 	
 	
 	/*
-	 * Take command and check number of arguments, as well as append timestamp
-	 * to message if not "send message destination" form
+	 * Appends the timestamp of the message to the end of the message
+	 * Adds message string to MessageSenderThread queue to be sent
+	 */
+	public void addMessageToLeaderQueue(MessageType msg) {
+		String tosend = msg.msg + " " + msg.ts.longValue();
+		try {
+			mqleader.put(tosend);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+	/*
+	 * Take command and check number of arguments
+	 * Returns an integer indicating which type of message it is
 	 */
 	private int parseForIncorrectFormat(MessageType msg) {
 		//TODO Implement all error checking
@@ -191,7 +206,7 @@ public class CommandInputThread extends Thread {
 			if (!hasKey || i < len)
 				return type;
 				
-			adjustedmsg = builder.toString() + " " + msg.ts.longValue();
+			adjustedmsg = builder.toString();
 			type = 0;
 		}
 		
@@ -219,14 +234,43 @@ public class CommandInputThread extends Thread {
 			if (!hasKey || !hasModel || i < len)
 				return type;
 			
-			adjustedmsg = builder.toString() + " " + msg.ts.longValue();
+			adjustedmsg = builder.toString();
 			type = 1;
 		}
 		
 		//insert key value model
 		else if (msg.msg.lastIndexOf("insert ") == 0) {
+			boolean hasKey = false, hasValue = false, hasModel = false;
+			builder.append("insert ");
+			int i = 7;
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add key to builder
+				builder.append(msg.msg.charAt(i));
+				hasKey = true;
+				i++;
+			}
+			builder.append(" "); //space between key and value
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add value to builder
+				builder.append(msg.msg.charAt(i));
+				hasValue = true;
+				i++;
+			}
+			builder.append(" "); //space between value and model
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add model to builder
+				builder.append(msg.msg.charAt(i));
+				hasModel = true;
+				i++;
+			}
+			//command does not have all arguments or more info after arguments
+			if (!hasKey || !hasModel || !hasValue || i < len)
+				return type;
 			
-			adjustedmsg = builder.toString() + " " + msg.ts.longValue();
+			adjustedmsg = builder.toString();
 			type = 2;
 		}
 		
@@ -238,8 +282,37 @@ public class CommandInputThread extends Thread {
 		
 		//update key value model
 		else if (msg.msg.lastIndexOf("update ") == 0) {
+			boolean hasKey = false, hasValue = false, hasModel = false;
+			builder.append("update ");
+			int i = 7;
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add key to builder
+				builder.append(msg.msg.charAt(i));
+				hasKey = true;
+				i++;
+			}
+			builder.append(" "); //space between key and value
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add value to builder
+				builder.append(msg.msg.charAt(i));
+				hasValue = true;
+				i++;
+			}
+			builder.append(" "); //space between value and model
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add model to builder
+				builder.append(msg.msg.charAt(i));
+				hasModel = true;
+				i++;
+			}
+			//command does not have all arguments or more info after arguments
+			if (!hasKey || !hasModel || !hasValue || i < len)
+				return type;
 			
-			adjustedmsg = builder.toString() + " " + msg.ts.longValue();
+			adjustedmsg = builder.toString();
 			type = 4;
 		}
 		
@@ -254,14 +327,13 @@ public class CommandInputThread extends Thread {
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
 	 * This method assumes that parseForIncorrectFormat has already been called
+	 * final format: delete key <requestingnodeid> <reqorack> <timestamp>
 	 */
 	private void parseDelete(MessageType msg) {
-		// TODO Auto-generated method stub
-		try {
-			mqleader.put(msg.msg);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
+		//We want to send this out even if this Node has no replica of the key
+
+		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + "req";
+		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 	
 	
@@ -270,14 +342,40 @@ public class CommandInputThread extends Thread {
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
 	 * This method assumes that parseForIncorrectFormat has already been called
+	 * final format: get key model <requestingnodeid> <requestnumber> <value> <reqorack>
 	 */
 	private void parseGet(MessageType msg) {
-		// TODO Auto-generated method stub
-		try {
-			mqleader.put(msg.msg);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		//Extract model out of get
+		String modelstr = msg.msg.substring(msg.msg.length()-1);
+		int model = Integer.parseInt(modelstr);
+		
+		switch (model) {
+			case 1: {
+				//linearizability: send to CentralServer, wait for req to be received
+				break;
+			}
+			case 2: {
+				//TODO: print out our own replica of this data
+				return;
+			}
+			case 3: {
+				
+			}
+			case 4: {
+				
+			}
+			default: {
+				System.out.println("Message was not correctly fomatted; try again");
+				return;
+			}
 		}
+		
+		node.reqcnt++;
+		//This format of the message represents a unique identifier for the request
+		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+		node.recvacks.put(msg.msg, 0);
+		msg.msg = msg.msg + " " + "req";
+		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 
 

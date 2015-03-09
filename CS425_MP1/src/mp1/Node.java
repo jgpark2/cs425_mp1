@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
 
 /*
  * Node: represents one node in our distributed system  
@@ -21,6 +22,11 @@ public class Node {
 
 	private NodeInfo[] nodesinfo;
 	public int myIdx; //index into NodeInfo array
+	
+	//Number of consistency model requests made by this Node
+	public int reqcnt = 0;
+	//Map that tracks how many acks we have received for a request
+	public ConcurrentHashMap<String, Integer> recvacks;
 
 	private ServerSocket server;
 	
@@ -158,6 +164,8 @@ public class Node {
         	receivers[i] = null;
         	senders[i] = null;
         }
+        
+        recvacks = new ConcurrentHashMap<String, Integer>();
 
 		//Start the CommandInputThread thread that will eventually spawn MessageDelayerThread Threads
         cmdin = new CommandInputThread(this);
