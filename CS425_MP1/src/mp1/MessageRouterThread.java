@@ -17,6 +17,7 @@ public class MessageRouterThread extends Thread {
 	
 	private CentralServer centralServer;
 	private NodeInfo [] nodesinfo;
+	private NodeInfo leaderInfo;
 
 	private ArrayBlockingQueue<String> mqin;
 	private ArrayList< ArrayBlockingQueue<MessageType> > mqoutarr;
@@ -33,6 +34,7 @@ public class MessageRouterThread extends Thread {
 			ArrayBlockingQueue<String> mqin, int mqmax) {
 		this.centralServer = centralServer;
 		nodesinfo = centralServer.getNodesInfo();
+		leaderInfo = centralServer.leaderInfo;
 		this.mqin = mqin;
 		this.mqmax = mqmax;
 		

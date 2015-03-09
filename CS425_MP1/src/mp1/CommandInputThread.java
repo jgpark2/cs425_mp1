@@ -22,6 +22,7 @@ public class CommandInputThread extends Thread {
 	
 	private Node node;
 	private NodeInfo [] nodesinfo;
+	private NodeInfo leaderInfo;
 	private int myIdx; //index into NodeInfo array
 	
 	private BufferedReader sysin;
@@ -41,6 +42,7 @@ public class CommandInputThread extends Thread {
     	this.node = node;
     	myIdx = node.myIdx;
     	nodesinfo = node.getNodesInfo();
+    	leaderInfo = node.leaderInfo;
     	
 		sysin = new BufferedReader(new InputStreamReader(System.in));
 		
@@ -87,8 +89,8 @@ public class CommandInputThread extends Thread {
 		Socket leaderconn = null;
 		while (leaderconn == null) {
 			try {
-				leaderconn = new Socket("127.0.0.1", 7504);//CENTRALSERVER PORT FROM CONFIG
-				System.out.print("Now connected to "+"127.0.0.1"+":7504");//CENTRALSERVER PORT FROM CONFIG
+				leaderconn = new Socket(leaderInfo.ip, leaderInfo.port);
+				System.out.print("Now connected to "+leaderInfo.ip+":" +leaderInfo.port);
 				System.out.println(" (leader)");
 				node.setToLeaderSendingThread(new MessageSenderThread(node, mqleader, leaderconn));
 			} catch (Exception e) {

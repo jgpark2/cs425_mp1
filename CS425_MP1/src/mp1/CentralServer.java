@@ -20,7 +20,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 public class CentralServer {
 	
 	private NodeInfo[] nodesinfo;
-	private NodeInfo leaderInfo;
+	public NodeInfo leaderInfo;
 
 	private ServerSocket server;
 	private ArrayBlockingQueue<String> mqin;
@@ -161,9 +161,9 @@ public class CentralServer {
         router = new MessageRouterThread(this, mqin, mqmax);
     	
         try {
-			server = new ServerSocket(7504); //CENTRALSERVER PORT FROM CONFIG
+			server = new ServerSocket(leaderInfo.port);
         } catch (IOException e) {
-			System.out.println("Could not listen on port 7504"); //CENTRALSERVER PORT FROM CONFIG
+			System.out.println("Could not listen on port "+leaderInfo.port);
 			e.printStackTrace();
 			System.exit(-1);
 			return;

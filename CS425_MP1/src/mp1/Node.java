@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Node {
 
 	private NodeInfo[] nodesinfo;
-	private NodeInfo leaderInfo;
+	public NodeInfo leaderInfo;
 	public int myIdx; //index into NodeInfo array
 	
 	//Number of consistency model requests made by this Node
