@@ -17,63 +17,34 @@ public class MessageRelayThread extends Thread {
 	
 	private CentralServer centralServer;
 	private NodeInfo [] nodesinfo;
-	private int recvIdx; //index into NodeInfo array
 	
 	private Socket socket;
 	private BufferedReader ins;
 	private ArrayBlockingQueue<String> mqin;
-
+	
 	
 	public MessageRelayThread(CentralServer centralServer, Socket socket,
-			ArrayBlockingQueue<String> mqin) {
+			BufferedReader ins, ArrayBlockingQueue<String> mqin) {
 		this.centralServer = centralServer;
 		nodesinfo = centralServer.getNodesInfo();
 		this.socket = socket;
+		this.ins = ins;
 		this.mqin = mqin;
 		
 		new Thread(this, "RelayMessage").start();
 	}
-	
-	
+
+
 	public void run() {
 		
 		try {
-			ins = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-		} catch (IOException e) {
-			System.out.println("Could not initialize socket stream");
-			e.printStackTrace();
-			try {
-				socket.close();
-				ins.close();
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
-			return;
-		}
-		
-		String input = "";
-		//exchange recvInfo with socket
-		try {
-			while ((input = ins.readLine())==null) {}
-			recvIdx = Integer.parseInt(input);
-			centralServer.setReceivingThreadIndex(recvIdx, this);
-		} catch (IOException e1) {
-			System.out.println("Could not receive initial info exchange");
-			e1.printStackTrace();
-			try {
-				socket.close();
-				ins.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			return;
-		}
-		
-		try {
 			//while Node keeps writing to its output stream...
-			while (((input = ins.readLine()) != null) && (input.compareToIgnoreCase("exit") != 0)) {
+			String input = "";
+			
+			while (((input = ins.readLine()) != null) && (input.compareToIgnoreCase("exit") != 0))
 				mqin.put(input);
-			}
+				
+			mqin.put("exit");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return;

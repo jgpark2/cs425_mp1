@@ -30,7 +30,8 @@ public class CommandInputThread extends Thread {
 	private int [] intmaxdelays;
 	
 	//because of Java, this can't be a generic array
-	private ArrayList < ArrayBlockingQueue<MessageType> > mqarr;
+	private ArrayList < ArrayBlockingQueue<MessageType> > mqnodearr;
+	private ArrayBlockingQueue<String> mqleader;
 	private int mqmax = 1023;
 	private MessageType [] last;
     
@@ -46,13 +47,14 @@ public class CommandInputThread extends Thread {
 		millismaxdelays = new Double[4];
 		intmaxdelays = new int[4];
 		r = new Random();
-		mqarr = new ArrayList < ArrayBlockingQueue<MessageType> >(4);
+		mqnodearr = new ArrayList < ArrayBlockingQueue<MessageType> >(4);
+		mqleader = new ArrayBlockingQueue<String>(mqmax);
 		last = new MessageType[4];
 		
 		for (int i=0; i<4; i++) {
 			millismaxdelays[i] = new Double(nodesinfo[i].max_delay*1000.0);
 			intmaxdelays[i] = millismaxdelays[i].intValue();
-			mqarr.add(new ArrayBlockingQueue<MessageType>(mqmax));
+			mqnodearr.add(new ArrayBlockingQueue<MessageType>(mqmax));
 			last[i] = new MessageType();
 		}
 		
@@ -74,10 +76,22 @@ public class CommandInputThread extends Thread {
     				System.out.print("Now connected to "+nodesinfo[i].ip+":"+nodesinfo[i].port);
     				System.out.println(" (node "+nodesinfo[i].id+")");
     				node.setSendingThreadIndex(i,
-    						new MessageDelayerThread(node, mqarr.get(i), mqmax, i, servconn));
+    						new MessageDelayerThread(nodesinfo, myIdx, mqnodearr.get(i), nodesinfo[i].id, servconn));
     			} catch (Exception e) {
     				servconn=null;
     			}
+			}
+		}
+		
+		Socket leaderconn = null;
+		while (leaderconn == null) {
+			try {
+				leaderconn = new Socket("127.0.0.1", 7504);//CENTRALSERVER PORT FROM CONFIG
+				System.out.print("Now connected to "+"127.0.0.1"+":7504");//CENTRALSERVER PORT FROM CONFIG
+				System.out.println(" (leader)");
+				node.setToLeaderSendingThread(new MessageSenderThread(node, mqleader, leaderconn));
+			} catch (Exception e) {
+				leaderconn = null;
 			}
 		}
 
@@ -91,14 +105,20 @@ public class CommandInputThread extends Thread {
         	try {
 				msg.msg = sysin.readLine();
 				now = System.currentTimeMillis();
-			} catch (Exception e) {
+				//THIS TIME WILL GET APPENDED TO THE END OF THE MESSAGE IF NOT "SEND" TYPE
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
         	
         	//parse message input
         	int recvIdx = parseCommandForRecvIdx(msg.msg);
         	if (recvIdx < 0) {
-        		System.out.println("Message was not correctly fomatted; try again");
+        		//System.out.println("Message was not correctly fomatted; try again");
+        		try {
+					mqleader.put(msg.msg);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
         		continue;
         	}
         	msg.msg = parseCommandForMessage(msg.msg);
@@ -110,7 +130,7 @@ public class CommandInputThread extends Thread {
 			msg.ts = new Long(Math.max(now + (long)randint, last[recvIdx].ts.longValue()));
 			
             try {
-                mqarr.get(recvIdx).put(msg);
+                mqnodearr.get(recvIdx).put(msg);
                 last[recvIdx] = msg;
                 System.out.print("Sent \""+msg.msg+"\" to "+nodesinfo[recvIdx].id+", system time is ");
 				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
@@ -135,9 +155,10 @@ public class CommandInputThread extends Thread {
 	
 	public void addMessageToAllQueues(MessageType msg) {
 		try {
-        	for (Iterator< ArrayBlockingQueue<MessageType> > it = mqarr.iterator(); it.hasNext();) {
+        	for (Iterator< ArrayBlockingQueue<MessageType> > it = mqnodearr.iterator(); it.hasNext();) {
         		it.next().put(msg);
         	}
+        	mqleader.put(msg.msg);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -194,6 +215,18 @@ public class CommandInputThread extends Thread {
 		}
 		
 		return node.getIndexFromId(id);
+	}
+	
+
+	/*
+	 * When a MessageReceiverThread receives a delete/get/insert/update message,
+	 * this method either sends a reply, updates a key/value, or does nothing
+	 */
+	public void respondToMessage(String input) {
+		// TODO Do things with the key/value Dictionary
+		
+		System.out.println("Responded to "+input);
+		
 	}
 	
 }

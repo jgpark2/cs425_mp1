@@ -3,7 +3,7 @@ package mp1;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 
 /*
  * MessageDelayerThread: 3 per Node object
@@ -12,40 +12,38 @@ import java.util.concurrent.BlockingQueue;
  */
 public class MessageDelayerThread extends Thread {
 
-	private Node node;
 	private NodeInfo [] nodesinfo;
 	private int myIdx; //index into NodeInfo array
-	private int recvIdx; //index into NodeInfo array
 	
-	private BlockingQueue<MessageType> mq;
-	private int mqmax;
+	private String recvId;
 	
-	private Socket receiver;
+	private ArrayBlockingQueue<MessageType> mq;
+	
+	private Socket socket;
 	private PrintWriter outs;
 	
 
-    public MessageDelayerThread(Node node, BlockingQueue<MessageType> mq,
-    			int maxsize, int recvIdx, Socket connection) {
-    	this.node = node;
-    	nodesinfo = node.getNodesInfo();
-    	myIdx = node.myIdx;
-    	this.recvIdx = recvIdx;
+    public MessageDelayerThread(NodeInfo [] nodesinfo, int myIdx, ArrayBlockingQueue<MessageType> mq,
+    		String recvId, Socket connection) {
+
+    	this.nodesinfo = nodesinfo;
+    	this.myIdx = myIdx;
+    	this.recvId = recvId;
 		this.mq = mq;
-		mqmax = maxsize;
-		receiver = connection;
+		socket = connection;
 		
-		new Thread(this, "DelayInput"+nodesinfo[recvIdx].id).start();
+		new Thread(this, "DelayInput"+recvId).start();
 	}
 
 	public void run() {
 		
 		try {
-			outs = new PrintWriter(receiver.getOutputStream(), true);
+			outs = new PrintWriter(socket.getOutputStream(), true);
 		} catch (IOException e) {
 			System.out.println("Unable to open socket stream");
 			e.printStackTrace();
 			try {
-				receiver.close();
+				socket.close();
 				outs.close();
 			} catch (IOException e1) {
 				e1.printStackTrace();
@@ -63,7 +61,6 @@ public class MessageDelayerThread extends Thread {
             	long tosleep = msg.ts - System.currentTimeMillis();
             	if (tosleep > 0)
             		Thread.sleep(tosleep);
-            	//System.out.println("Consumed "+msg.msg);
             	//while MessageReceiverThread keeps reading from its input stream...
             	outs.println(msg.msg);
             }
@@ -72,9 +69,9 @@ public class MessageDelayerThread extends Thread {
             e.printStackTrace();
         }
 		
-		System.out.println("MessageDelayerThread to node "+nodesinfo[recvIdx].id+" received exit, exiting");
+		System.out.println("MessageDelayerThread to node "+recvId+" received exit, exiting");
 		try {
-			receiver.close();
+			socket.close();
 			outs.close();
 		} catch (IOException e1) {
 			e1.printStackTrace();

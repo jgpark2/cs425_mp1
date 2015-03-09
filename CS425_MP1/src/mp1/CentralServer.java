@@ -1,8 +1,10 @@
 package mp1;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -13,7 +15,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  * CentralServer: represents the central leader in our distributed system
  * Holds 1 MessageRouterThread
  *       4 MessageRelayThread (1 receiving from every node)
- *       4 MessageSenderThread (1 sending to every node)
+ *       4 MessageDelayerThread (1 sending to every node)
  */
 public class CentralServer {
 	
@@ -24,9 +26,9 @@ public class CentralServer {
 	private ArrayBlockingQueue<String> mqin;
 	private int mqmax = 1023;
 	
-	private MessageRouterThread router; //this will create the MessageSenderThreads on Socket connection
+	private MessageRouterThread router; //this will create the MessageDelayerThreads on Socket connection
 	private MessageRelayThread [] receivers; //spawned from CentralServer
-	private MessageSenderThread [] senders; //spawned from MessageRouterThread
+	private MessageDelayerThread [] senders; //spawned from MessageRouterThread
 
 	
 	public static void main(String[] args) {
@@ -126,7 +128,7 @@ public class CentralServer {
 	private void start() {
 		
 		receivers = new MessageRelayThread[4];
-        senders = new MessageSenderThread[4];
+        senders = new MessageDelayerThread[4];
         for (int i=0; i<4; i++) {
         	receivers[i] = null;
         	senders[i] = null;
@@ -134,13 +136,13 @@ public class CentralServer {
         
         mqin = new ArrayBlockingQueue<String>(mqmax);
 
-		//Start the MessageRouterThread thread that will eventually spawn 3 MessageSenderThread Threads (sockets)
+		//Start the MessageRouterThread thread that will eventually spawn 3 MessageDelayerThread Threads (sockets)
         router = new MessageRouterThread(this, mqin, mqmax);
     	
         try {
-			server = new ServerSocket(7600); //at the centralserver port
+			server = new ServerSocket(7504); //CENTRALSERVER PORT FROM CONFIG
         } catch (IOException e) {
-			System.out.println("Could not listen on port "); //centralserver port
+			System.out.println("Could not listen on port 7504"); //CENTRALSERVER PORT FROM CONFIG
 			e.printStackTrace();
 			System.exit(-1);
 			return;
@@ -152,7 +154,12 @@ public class CentralServer {
         while(count < 4){
             try{
             	socket = server.accept();
-                new MessageRelayThread(this, socket, mqin);
+            	BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            	String input = "";
+    			while ((input = in.readLine())==null) {} //get recvIdx from client
+    			int idx = Integer.parseInt(input);
+    			setReceivingThreadIndex(idx, new MessageRelayThread(this, socket, in, mqin));
+    			
 				count++;
             } catch(Exception e){
             	System.out.println("Connection accept failed");
@@ -170,7 +177,7 @@ public class CentralServer {
 		receivers[idx] = receiver;
 	}
 		
-	public void setSendingThreadIndex(int idx, MessageSenderThread sender) {
+	public void setSendingThreadIndex(int idx, MessageDelayerThread sender) {
 		if ((idx < 0) || (idx > 3) || (sender == null))
 			return;
 		senders[idx] = sender;
@@ -182,7 +189,7 @@ public class CentralServer {
 		return receivers[idx];
 	}
 			
-	public MessageSenderThread getSendingThread(int idx) {
+	public MessageDelayerThread getSendingThread(int idx) {
 		if ((idx < 0) || (idx > 3))
 			return null;
 		return senders[idx];

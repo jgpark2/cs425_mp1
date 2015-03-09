@@ -18,3 +18,5 @@ http://docs.oracle.com/javase/7/docs/api/java/util/Queue.html
 
 Java Socket Class:
 http://docs.oracle.com/javase/7/docs/api/java/net/Socket.html
+
+Piazza post about format of output from Nodes: @126

@@ -2,6 +2,7 @@ package mp1;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.File;
@@ -10,14 +11,11 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 /*
- * Node: represents one node in our distributed system
+ * Node: represents one node in our distributed system  
  * Holds 1 CommandInputThread
- *       3 MessageReceiverThread (1 receiving from every other node)
- *       3 MessageDelayerThread (1 delaying for every other node)
- * - or with CentralServer -
- * Holds 1 CommandInputThread
- *       1 MessageReceiverThread, from CentralServer
- *       1 MessageDelayerThread, to CentralServer
+ *       4 MessageReceiverThread (3 from Nodes, 1 from CentralServer)
+ *       3 MessageDelayerThread (3 to Nodes)
+ *       1 MessageSenderThread (1 to CentralServer)
  */
 public class Node {
 
@@ -32,7 +30,7 @@ public class Node {
 	private MessageDelayerThread [] senders;
 	
 	private MessageReceiverThread fromLeader;
-	private MessageDelayerThread toLeader;
+	private MessageSenderThread toLeader;
 
 	
 	public static void main(String[] args) throws Exception
@@ -163,7 +161,7 @@ public class Node {
         	senders[i] = null;
         }
 
-		//Start the CommandInputThread thread that will eventually spawn 3 MessageDelayerThread Threads (sockets)
+		//Start the CommandInputThread thread that will eventually spawn MessageDelayerThread Threads
         cmdin = new CommandInputThread(this);
         
         try {
@@ -175,30 +173,25 @@ public class Node {
 			return;
         }
         
-/*		//Without the CentralServer
-        //Start the SEND thread for each connection
-        Socket socket;
-		int count = 0;
-
-        while(count < 3){
-            try{
-            	socket = server.accept();
-                new MessageReceiverThread(this, socket);
-				count++;
-            } catch(Exception e){
-            	System.out.println("Connection accept failed: "+nodesinfo[myIdx].port);
-				e.printStackTrace();
-            }
-        }
-*/
         //With the CentralServer
         Socket socket;
-        try {
-        	socket = server.accept();
-        	new MessageReceiverThread(this, socket);
-        } catch (Exception e) {
-        	System.out.println("Connection accept with CentralServer failed");
-			e.printStackTrace();
+        int count = 0;
+        
+        while (count < 4) { //connect with 3 Nodes and 1 CentralServer
+        	try {
+        		socket = server.accept();
+        		BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    			String input = "";
+    			while ((input = in.readLine())==null) {} //get recvIdx from client
+    			int idx = Integer.parseInt(input);
+    			setReceivingThreadIndex(idx, new MessageReceiverThread(this, socket, in, idx));
+
+    			count++;
+        	} catch (Exception e) {
+        		System.out.println("Connection accept with CentralServer failed");
+        		e.printStackTrace();
+        		return;
+        	}
         }
 
 	}
@@ -206,9 +199,12 @@ public class Node {
 	
 	//This methods are used to fill in the Socket arrays once a connections is initialized
 	public void setReceivingThreadIndex(int idx, MessageReceiverThread receiver) {
-		if ((idx < 0) || (idx > 3) || (receiver == null))
+		if ((idx < -1) || (idx > 3) || (receiver == null))
 			return;
-		receivers[idx] = receiver;
+		if (idx == -1)
+			fromLeader = receiver;
+		else
+			receivers[idx] = receiver;
 	}
 		
 	public void setSendingThreadIndex(int idx, MessageDelayerThread delayer) {
@@ -216,18 +212,11 @@ public class Node {
 			return;
 		senders[idx] = delayer;
 	}
-		
-	public MessageReceiverThread getReceivingThread(int idx) {
-		if ((idx < 0) || (idx > 3) || (idx == myIdx))
-			return null;
-		return receivers[idx];
+	
+	public void setToLeaderSendingThread(MessageSenderThread sender) {
+		toLeader = sender;
 	}
-		
-	public MessageDelayerThread getSendingThread(int idx) {
-		if ((idx < 0) || (idx > 3) || (idx == myIdx))
-			return null;
-		return senders[idx];
-	}
+
 		
 	public CommandInputThread getCommandInputThread() {
 		return cmdin;
@@ -251,6 +240,14 @@ public class Node {
 			i = 3;
 			
 		return i;
+	}
+	
+	public String getIdFromIndex(int idx) {
+		if (idx == -1)
+			return "leader";
+		if (idx >= 0 && idx < 4)
+			return nodesinfo[idx].id;
+		return "";
 	}
 		
 		
