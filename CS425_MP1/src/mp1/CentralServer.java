@@ -20,7 +20,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 public class CentralServer {
 	
 	private NodeInfo[] nodesinfo;
-	//Made a separate Nodeinfo for centralserver, add to parseconfig
+	private NodeInfo leaderInfo;
 
 	private ServerSocket server;
 	private ArrayBlockingQueue<String> mqin;
@@ -48,6 +48,8 @@ public class CentralServer {
 	private int parseConfig() {
 		
 		nodesinfo = new NodeInfo[4];
+		leaderInfo = new NodeInfo();
+		
 		for (int i=0; i<4; i++)
 			nodesinfo[i] = new NodeInfo();
 
@@ -102,6 +104,25 @@ public class CentralServer {
 				str = new StringWriter();
 				nodesinfo[i].max_delay = mddouble.doubleValue();
 			}
+			
+			//Central server node
+			str = new StringWriter();
+			content = fis.read(); //node id
+			str.write(content);
+			leaderInfo.id = str.toString();
+			str = new StringWriter();
+			content = fis.read(); //,
+			while ((char)(content = fis.read()) != '\n') //node ip
+				str.write(content);
+			leaderInfo.ip = str.toString();
+			str = new StringWriter();
+			content = fis.read(); //node id
+			content = fis.read(); //,
+			while ((char)(content = fis.read()) != '\n') //node port
+				str.write(content);
+			Integer portnumint = new Integer(str.toString());
+			str = new StringWriter();
+			leaderInfo.port = portnumint.intValue();
 			
 		} catch (Exception e) { //if config file can't be parsed, exit
 			e.printStackTrace();
