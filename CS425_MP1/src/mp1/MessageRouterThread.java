@@ -95,18 +95,27 @@ public class MessageRouterThread extends Thread {
 	}
 	
 	
+	/*
+	 * This method assumes that all messages sent to CentralServer have the
+	 * timestamp of the invocation of the operation (whether req or ack)
+	 * appended to the end of the message as a long type
+	 */
 	private void calculateDelayAndAddToQueue(int recvIdx, String msg) {
-		MessageType tosend = new MessageType(msg, new Long(0));
 		
-		//TODO: parse the end of the message to figure out when it was timestamped
-		// instead of relying on system time
-		Long ts = System.currentTimeMillis();
+		//parse the end of the message to figure out when it was timestamped
+		int i = msg.length()-1;
+		while (msg.charAt(i) != ' ') //move through latest timestamp
+			i--;
+		String timestr = msg.substring(i+1, msg.length());
+		long ts = Long.parseLong(timestr);
 		
 		//Calculate random delay
 		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
 		
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
-		tosend.ts = new Long(Math.max(ts + (long)randint, last[recvIdx].ts.longValue()));
+		Long tosendts = new Long(Math.max(ts + (long)randint, last[recvIdx].ts.longValue()));
+		
+		MessageType tosend = new MessageType(msg, tosendts);
 		
 		try {
 			mqoutarr.get(recvIdx).put(tosend);
@@ -133,13 +142,12 @@ public class MessageRouterThread extends Thread {
 	 * should receive it
 	 */
 	private ArrayList<Integer> parseMessageForReceivingNodes(String msg) {
-		//TODO: finish parsing this exactly
+		
 		ArrayList<Integer> ret = new ArrayList<Integer>();
 		
 		//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 		if (msg.substring(0, 4).compareToIgnoreCase("get ") == 0) {
-
-			//At the moment, all get messages that go through CentralServer are requests
+			//All get messages that go through CentralServer are requests
 			//(sequential consistency and linearizability need no acks, but do need own req)
 			for (int i=0; i<4; i++) {
 				ret.add(new Integer(i));
@@ -149,13 +157,53 @@ public class MessageRouterThread extends Thread {
 		//delete key <requestingnodeid> <reqorack> <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("delete ") == 0) {
 			
+			//Extract requestingnodeid
+			int idx = 7;
+			while (msg.charAt(idx) != ' ') //move past key
+				idx++;
+			idx++; //move past space between key and requestingnodeid
+			String reqId = msg.substring(idx, idx+1);
+			int reqIdx = centralServer.getIndexFromId(reqId);
+			
+			if (msg.lastIndexOf("req") != -1) { //request, send to all except requestingnode
+				for (int i=0; i<4; i++) {
+					if (i != reqIdx)
+						ret.add(new Integer(i));
+				}
+			}
+			
+			else { //ack, send to requestingnode				
+				ret.add(new Integer(reqIdx));
+			}
 		}
 		
 		//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("insert ") == 0) {
 			
+			//Extract requestingnodeid
+			int idx = 7;
+			while (msg.charAt(idx) != ' ') //move past key
+				idx++;
+			idx++; //move past space between key and value
+			while (msg.charAt(idx) != ' ') //move past value
+				idx++;
+			idx+=3; //move past space,model,space
+			String reqId = msg.substring(idx, idx+1);
+			int reqIdx = centralServer.getIndexFromId(reqId);
+			
+			if (msg.lastIndexOf("req") != -1) { //request, send to all except requestingnode
+				for (int i=0; i<4; i++) {
+					if (i != reqIdx)
+						ret.add(new Integer(i));
+				}
+			}
+			
+			else { //ack, send to requestingnode
+				ret.add(new Integer(reqIdx));
+			}
 		}
 		
+		//TODO: finish parsing this exactly
 		//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("update ") == 0) {
 			
