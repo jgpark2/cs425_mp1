@@ -107,6 +107,9 @@ public class CommandInputThread extends Thread {
 		
         while (msg.msg.compareToIgnoreCase("exit") != 0) {
 
+        	//Discard any old references and make a new MT object
+        	msg = new MessageType("", new Long(0));
+        	
         	try {
 				msg.msg = sysin.readLine();
 				cmdComplete = false;
@@ -767,6 +770,13 @@ public class CommandInputThread extends Thread {
 	 */
 	public void respondToMessage(String input) {
 		// TODO Do things with the key/value Dictionary
+		
+		//parse inputs...
+		
+		//For linearizability: If node is myself...
+			//if "get", print from local map
+			//else if write/del requests, modify data and then send out ack (and then ack counter for eventual)
+		
 		
 		String output = input;
 		
