@@ -197,6 +197,30 @@ public class MessageRouterThread extends Thread {
 			}
 		}
 		
+		//search key <requestingnodeid> <requestnumber> <reqorack> <timestamp>
+		else if (msg.substring(0, 7).compareToIgnoreCase("search ") == 0) {
+			
+			//Extract requestingnodeid
+			int idx = 7;
+			while (msg.charAt(idx) != ' ') //move past key
+				idx++;
+			idx++; //move past space between key and reqId
+			
+			String reqId = msg.substring(idx, idx+1);
+			int reqIdx = centralServer.getIndexFromId(reqId);
+			
+			if (msg.lastIndexOf("req") != -1) { //request, send to all except requestingnode
+				for (int i=0; i<4; i++) {
+					if (i != reqIdx)
+						ret.add(new Integer(i));
+				}
+			}
+			
+			else { //ack, send to requestingnode
+				ret.add(new Integer(reqIdx));
+			}
+		}
+		
 		return ret;
 	}
 

@@ -7,4 +7,4 @@ get 17 3
 delay 0.5
 update 5 8 4
 delay 0.6
-show-all
+search 5

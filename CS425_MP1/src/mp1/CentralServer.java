@@ -169,6 +169,9 @@ public class CentralServer {
 			return;
         }
         
+        System.out.println("Leader started on "
+        		+leaderInfo.ip+":"+leaderInfo.port);
+        
         Socket socket;
 		int count = 0;
 

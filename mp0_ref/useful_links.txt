@@ -24,3 +24,6 @@ Piazza post about format of output from Nodes: @126
 Piazza post about why we don't need delay to CentralServer: @156
 
 Piazza post about eventual consistency numbers and delete spec: @236
+
+Piazza post about what happens with eventual consistency if k copies don't
+exist in the system: @175

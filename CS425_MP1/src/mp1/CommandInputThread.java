@@ -145,6 +145,10 @@ public class CommandInputThread extends Thread {
 						parseDelay(msg);
 						break;
 					}
+					case 7: { //search key
+						parseSearch(msg);
+						break;
+					}
 					default: {
 						System.out.println("Message was not correctly fomatted; try again");
 						continue;
@@ -377,6 +381,26 @@ public class CommandInputThread extends Thread {
 			type = 6;
 		}
 		
+		//search key
+		else if (msg.msg.lastIndexOf("search ") == 0) {
+			boolean hasKey = false;
+			builder.append("search ");
+			int i = 7;
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add key to builder
+				builder.append(msg.msg.charAt(i));
+				hasKey = true;
+				i++;
+			}
+			//command does not have all arguments or more info after arguments
+			if (!hasKey || i < len)
+				return type;
+			
+			adjustedmsg = builder.toString();
+			type = 7;
+		}
+		
 		msg.msg = adjustedmsg;
 //		System.out.println("Exiting parseForIncorrectFormat, msg is "+msg.msg);
 		return type;
@@ -448,28 +472,43 @@ public class CommandInputThread extends Thread {
 				String key = msg.msg.substring(4, msg.msg.length()-2);
 				Datum value = node.sharedData.get(key);
 				
-				if (value == null) //key is not in replica
-					System.out.print("get("+key+") = (NO KEY FOUND)");
+				if (value == null) { //key is not in replica, send request to all other Nodes
+					
+					//This format of the message represents a unique identifier for the request
+					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+					node.recvacks.put(msg.msg, 1);
+					msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+					for (int i = 0; i< 4; i++) {
+						if (i != myIdx)
+							addMessageToNodeQueue(msg, i);
+					}
+				}
 				
 				else {
 					System.out.print("get("+key+") = ("+value.value+", ");
 					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
 					Date curdate = new Date(value.timestamp);
 					System.out.println(format.format(curdate) + ")");
+					this.cmdComplete = true;
 				}
 				
-				this.cmdComplete = true;
 				break;
 			}
 			
 			case 4: {
-				//eventual consistency, R=2: send to 1 other Nodes, wait for 1 ack
+				//eventual consistency, R=2; wait until 2 Nodes have been read
+				
+				//Since our replica may not contain key, we have to read all other Nodes too
 				
 				//This format of the message represents a unique identifier for the request
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 1);
+				node.recvacks.put(msg.msg, 2);
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
-				addMessageToNodeQueue(msg, (myIdx + 1)%4);
+				for (int i = 0; i< 4; i++) {
+					if (i != myIdx)
+						addMessageToNodeQueue(msg, i);
+				}
+				
 				break;
 			}
 			
@@ -509,7 +548,7 @@ public class CommandInputThread extends Thread {
 			}
 			
 			case 3: {
-				//eventual consistency, W=1: send to 1 replica (ours)
+				//eventual consistency, W=1: send to 1 replica (ours) (Piazza post @178)
 				
 				//Extract key out of msg
 				StringBuilder builder = new StringBuilder();
@@ -591,7 +630,7 @@ public class CommandInputThread extends Thread {
 			}
 					
 			case 3: {
-				//eventual consistency, W=1: send to 1 replica (ours)
+				//eventual consistency, W=1: send to 1 replica (ours) (Piazza post @178)
 				
 				//Extract key out of msg
 				StringBuilder builder = new StringBuilder();
@@ -718,7 +757,7 @@ public class CommandInputThread extends Thread {
 
 
 	/*
-	 * If the command is of the form "show-all", this method prints displays all
+	 * If the command is of the form "show-all", this method displays all
 	 * the key-value pairs stored at this replica
 	 * This method assumes that parseForIncorrectFormat has already been called
 	 */
@@ -758,6 +797,24 @@ public class CommandInputThread extends Thread {
 		
 		this.cmdComplete = true;
 	}
+
+
+	/*
+	 * If the command is of the form "search key", this method sends a request
+	 * to all other Nodes to see if their replica contains the key (waits for 3 acks)
+	 * This method assumes that parseForIncorrectFormat has already been called
+	 * final format: search key <requestingnodeid> <requestnumber> <reqorack> <timestamp>
+	 */
+	private void parseSearch(MessageType msg) {
+		node.reqcnt++;
+		
+		//This format of the message represents a unique identifier for the request
+		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+		node.recvacks.put(msg.msg, 3);
+		msg.msg = msg.msg + " " + "req";
+		
+		addMessageToLeaderQueue(msg); //this method adds the timestamp
+	}
 	
 
 	/*
@@ -775,6 +832,13 @@ public class CommandInputThread extends Thread {
 			//if "get", print from local map
 			//L: delete requests won't get here, they are handled in MessageReceiverThread, line 59
 			//else if write/del requests, modify data and then send out ack (and then ack counter for eventual)
+		
+		//Eventual consistency (worry about this last!!)
+			//send acks over peer channels, not leader channel
+			//if not enough copies exist in the system on an update req, add enough copies to the system
+		
+		//All consistency models EXCEPT eventual consistency:
+			//if the key does not exist and you attempt an update, report an error (Piazza @236)
 		
 		
 		String output = input;

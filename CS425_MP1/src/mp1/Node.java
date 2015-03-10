@@ -125,14 +125,10 @@ public class Node {
 				str.write(content);
 				nodesinfo[i].id = str.toString();
 				
-				if (str.toString().compareTo(id)==0) {
-					System.out.println("Identified this node as "+str.toString());
+				if (str.toString().compareTo(id)==0)
 					myIdx = i;
-				}
-				
 				
 				str = new StringWriter();
-				
 				content = fis.read(); //,
 				
 				while ((char)(content = fis.read()) != '\n') //node ip
@@ -231,7 +227,9 @@ public class Node {
 			return;
         }
         
-        //With the CentralServer
+        System.out.println("\nNode "+nodesinfo[myIdx].id+" started on "
+        		+nodesinfo[myIdx].ip+":"+nodesinfo[myIdx].port+"\n");
+        
         Socket socket;
         int count = 0;
         
