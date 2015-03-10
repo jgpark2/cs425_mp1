@@ -128,6 +128,7 @@ public class MessageRouterThread extends Thread {
 
 	public void addMessageToAllQueues(MessageType msg) {
 		try {
+			//J: TODO: what is this code supposed to be doing? 
         	for (Iterator< ArrayBlockingQueue<MessageType> > it = mqoutarr.iterator(); it.hasNext();) {
         		it.next().put(msg);
         	}
