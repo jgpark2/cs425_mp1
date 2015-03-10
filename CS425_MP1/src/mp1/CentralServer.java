@@ -37,7 +37,7 @@ public class CentralServer {
 		
 		if (leader.parseConfig() == -1) {
 			System.out.println("Failed to parse config");
-			System.exit(1);
+			System.exit(-1);
 			return;
 		}
 		

@@ -53,17 +53,16 @@ public class MessageSenderThread extends Thread {
 		//send myIdx to the MessageRelayThread on the other end (at the CentralServer)
 		outs.println(myIdx);
 		
-		try {
-            String msg;
-            //consuming messages until exit message is received
-            while((msg = mqout.take()).compareToIgnoreCase("exit") != 0) {
-            	//while MessageReceiverThread keeps reading from its input stream...
-            	outs.println(msg);
-            }
-            outs.println(msg);
-        } catch(InterruptedException e) {
-            e.printStackTrace();
-        }
+		while (true) {
+			String msg = "";
+			try {
+				msg = mqout.take();
+				//while MessageReceiverThread keeps reading from its input stream...
+	        	outs.println(msg);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		
 	}
 

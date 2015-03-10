@@ -75,8 +75,8 @@ public class MessageRouterThread extends Thread {
 		
 		//Remove a message from the in-message queue and determine where it goes
 		try {
-			String msg;
-			while ((msg = mqin.take()).compareToIgnoreCase("exit") != 0) {
+			while (true) {
+				String msg = mqin.take();
 				
 				ArrayList<Integer> list = parseMessageForReceivingNodes(msg);
 				for (int i=0; i<list.size(); i++) {
@@ -86,8 +86,6 @@ public class MessageRouterThread extends Thread {
 	        	}
 				
 			}
-			MessageType exitmsg = new MessageType(msg, new Long(0));
-			addMessageToAllQueues(exitmsg); //exit message
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -126,9 +124,14 @@ public class MessageRouterThread extends Thread {
 	}
 
 
+	
+	/*
+	 * Method to easily send a message to all Nodes
+	 * This method is NOT used for routing normal messages because
+	 * this does not calculate any delay
+	 */
 	public void addMessageToAllQueues(MessageType msg) {
 		try {
-			//J: TODO: what is this code supposed to be doing? 
         	for (Iterator< ArrayBlockingQueue<MessageType> > it = mqoutarr.iterator(); it.hasNext();) {
         		it.next().put(msg);
         	}

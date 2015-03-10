@@ -54,27 +54,21 @@ public class MessageDelayerThread extends Thread {
 		//send myIdx to the MessageReceiverThread on the other end
 		outs.println(myIdx);
     	
-		try {
-            MessageType msg;
-            //consuming messages until exit message is received
-            while((msg = mq.take()).msg.compareToIgnoreCase("exit") != 0) {
-            	long tosleep = msg.ts - System.currentTimeMillis();
-            	if (tosleep > 0)
-            		Thread.sleep(tosleep);
-            	//while MessageReceiverThread keeps reading from its input stream...
-            	outs.println(msg.msg);
-            }
-            outs.println(msg.msg);
-        } catch(InterruptedException e) {
-            e.printStackTrace();
-        }
-		
-		System.out.println("MessageDelayerThread to node "+recvId+" received exit, exiting");
-		try {
-			socket.close();
-			outs.close();
-		} catch (IOException e1) {
-			e1.printStackTrace();
+
+		while(true) {
+			MessageType msg = new MessageType();
+			try {
+				msg = mq.take();
+				long tosleep = msg.ts - System.currentTimeMillis();
+				if (tosleep > 0)
+					Thread.sleep(tosleep);
+				
+				//while MessageReceiverThread keeps reading from its input stream...
+				outs.println(msg.msg);
+				
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 		
     }

@@ -19,7 +19,7 @@ public class MessageRelayThread extends Thread {
 	private NodeInfo [] nodesinfo;
 	
 	private Socket socket;
-	private BufferedReader ins;
+	private BufferedReader ins; //coming from socket connection
 	private ArrayBlockingQueue<String> mqin;
 	
 	
@@ -40,11 +40,9 @@ public class MessageRelayThread extends Thread {
 		try {
 			//while Node keeps writing to its output stream...
 			String input = "";
-			
-			while (((input = ins.readLine()) != null) && (input.compareToIgnoreCase("exit") != 0))
+			while ((input = ins.readLine()) != null)
 				mqin.put(input);
 				
-			mqin.put("exit");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return;

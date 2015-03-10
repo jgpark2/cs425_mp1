@@ -26,7 +26,8 @@ public class CommandInputThread extends Thread {
 	private NodeInfo leaderInfo;
 	private int myIdx; //index into NodeInfo array
 	
-	private BufferedReader sysin;
+	private BufferedReader cmdin; //this can be from FileReader OR System.in	
+	
 	private Random r;
 	//These are calculated once and saved to be more efficient
 	private Double [] millismaxdelays;
@@ -42,14 +43,13 @@ public class CommandInputThread extends Thread {
 	public volatile boolean cmdComplete = false;
     
 
-	//TODO: add support for inputfis
-	public CommandInputThread(Node node, FileInputStream inputfis) {
+	public CommandInputThread(Node node, BufferedReader inputstream) {
 		this.node = node;
     	myIdx = node.myIdx;
     	nodesinfo = node.getNodesInfo();
     	leaderInfo = node.leaderInfo;
     	
-		sysin = new BufferedReader(new InputStreamReader(System.in));
+		cmdin = inputstream;
 		
 		//Translate delay into necessary types
 		millismaxdelays = new Double[4];
@@ -71,6 +71,7 @@ public class CommandInputThread extends Thread {
 
 	public void run() {
 
+		//Create socket connections
 		for (int i=0; i<4; i++) {
 			//Skip my own server
 			if (i == myIdx)
@@ -102,69 +103,66 @@ public class CommandInputThread extends Thread {
 			}
 		}
 
-		//Get message commands from System.in
-		MessageType msg = new MessageType("", new Long(0));
 		
-        while (msg.msg.compareToIgnoreCase("exit") != 0) {
-
-        	//Discard any old references and make a new MT object
-        	msg = new MessageType("", new Long(0));
-        	
-        	try {
-				msg.msg = sysin.readLine();
-				cmdComplete = false;
-				msg.ts = System.currentTimeMillis();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-        	
-        	//parse and send along message input
-        	int error = parseForIncorrectFormat(msg);
-        	switch (error) {
-        		case 0: { //delete
-        			parseDelete(msg);
-        			break;
-        		}
-        		case 1: { //get
-        			parseGet(msg);
-        			break;
-        		}
-        		case 2: { //insert
-        			parseInsert(msg);
-        			break;
-        		}
-        		case 3: { //send
-        			parseCommandForMessage(msg);
-        			break;
-        		}
-        		case 4: { //update
-        			parseUpdate(msg);
-        			break;
-        		}
-        		case 5: { //show-all
-        			show_allUtility();
-        			break;
-        		}
-        		case 6: { //delay T
-        			parseDelay(msg);
-        			break;
-        		}
-        		default: {
-        			System.out.println("Message was not correctly fomatted; try again");
-        			continue;
-        		}
-        	}
-        	
-        	//do not restart the loop until the command is finished being processed
-        	while (!cmdComplete) {}
-        }
-        
-        //Send exit message to all channels ?
-        msg = new MessageType("exit", new Long(0));
-        addMessageToAllQueues(msg);
-        System.out.println("CommandInputThread received \"exit\", exiting");
+		//Get commands from either System.in or an input file
+		String cmd = "";
+		
         try {
-			sysin.close();
+			while ((cmd = cmdin.readLine()) != null) { //no longer support exit, just read until end of input file
+
+				//Discard any old references and make a new MT object
+				MessageType msg = new MessageType(cmd, System.currentTimeMillis());
+				cmdComplete = false;
+				
+				//parse and send along message input
+				int error = parseForIncorrectFormat(msg);
+				switch (error) {
+					case 0: { //delete
+						parseDelete(msg);
+						break;
+					}
+					case 1: { //get
+						parseGet(msg);
+						break;
+					}
+					case 2: { //insert
+						parseInsert(msg);
+						break;
+					}
+					case 3: { //send
+						parseCommandForMessage(msg);
+						break;
+					}
+					case 4: { //update
+						parseUpdate(msg);
+						break;
+					}
+					case 5: { //show-all
+						show_allUtility();
+						break;
+					}
+					case 6: { //delay T
+						parseDelay(msg);
+						break;
+					}
+					default: {
+						System.out.println("Message was not correctly fomatted; try again");
+						continue;
+					}
+				}
+				
+				//do not restart the loop until the command is finished being processed
+				while (!cmdComplete) {}
+			}
+		} catch (IOException e) {
+			System.out.println("Failed to get command");
+			e.printStackTrace();
+			return;
+		}
+        
+        System.out.println("CommandInputThread reached end of file, exiting");
+        try {
+			cmdin.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -775,6 +773,7 @@ public class CommandInputThread extends Thread {
 		
 		//For linearizability: If node is myself...
 			//if "get", print from local map
+			//L: delete requests won't get here, they are handled in MessageReceiverThread, line 59
 			//else if write/del requests, modify data and then send out ack (and then ack counter for eventual)
 		
 		

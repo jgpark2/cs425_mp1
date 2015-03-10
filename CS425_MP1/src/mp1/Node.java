@@ -2,6 +2,7 @@ package mp1;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
@@ -30,7 +31,7 @@ public class Node {
 	public ConcurrentHashMap<String, Integer> recvacks;
 
 	private ServerSocket server;
-	public FileInputStream inputfis = null;
+	public BufferedReader inputs = null;
 	
 	private CommandInputThread cmdin;
 	private MessageReceiverThread [] receivers;
@@ -76,11 +77,16 @@ public class Node {
 		if (filename != null) {
 			File inputfile = new File(filename);
 			try {
-				inputfis = new FileInputStream(inputfile);
+				inputs = new BufferedReader(new FileReader(inputfile));
 			} catch (FileNotFoundException e) {
+				System.out.println("Could not open input file");
 				e.printStackTrace();
-				inputfis = null;
+				inputs = null;
+				return;
 			}
+		}
+		else { //we are using System.in for commands, not an input file
+			inputs = new BufferedReader(new InputStreamReader(System.in));
 		}
 	}
 	
@@ -214,7 +220,7 @@ public class Node {
         sharedData = new ConcurrentHashMap<String, Datum>();
 
 		//Start the CommandInputThread thread that will eventually spawn MessageDelayerThread Threads
-        cmdin = new CommandInputThread(this, inputfis);
+        cmdin = new CommandInputThread(this, inputs);
         
         try {
 			server = new ServerSocket(nodesinfo[myIdx].port);

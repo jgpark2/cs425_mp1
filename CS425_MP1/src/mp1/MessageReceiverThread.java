@@ -45,7 +45,7 @@ public class MessageReceiverThread extends Thread {
 		String input = "";
 		try {
 			//while CentralServer keeps writing to its output stream...
-			while (((input = ins.readLine()) != null) && (input.compareToIgnoreCase("exit") != 0)) {
+			while ((input = ins.readLine()) != null) {
 				
 				//TODO: respond to these separately
 				//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>

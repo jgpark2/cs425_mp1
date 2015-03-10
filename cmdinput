@@ -1,0 +1,10 @@
+insert 5 24 3
+delay 0.1
+insert 17 0 4
+show-all
+delay 0.3
+get 17 3
+delay 0.5
+update 5 8 4
+delay 0.6
+show-all
