@@ -1,6 +1,7 @@
 package mp1;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
@@ -29,6 +30,7 @@ public class Node {
 	public ConcurrentHashMap<String, Integer> recvacks;
 
 	private ServerSocket server;
+	public FileInputStream inputfis = null;
 	
 	private CommandInputThread cmdin;
 	private MessageReceiverThread [] receivers;
@@ -38,26 +40,48 @@ public class Node {
 	private MessageSenderThread toLeader;
 
 	public ConcurrentHashMap<String, Datum> sharedData;
-	
+
+
 	public static void main(String[] args) throws Exception
-	{
-		if (args.length != 1) {
-			System.out.println("Usage: java Node [node_id]");
-			System.exit(1);
+	{		
+		Node node;
+		
+		if (args.length == 1)
+			node = new Node(null);
+		else if (args.length == 2)
+			node = new Node(args[1]);
+		else {
+			System.out.println("Usage: Node [node_id]");
+			System.out.println("Optional usage: Node [node_id] [input_file]");
+			System.exit(-1);
 			return;
 		}
 		
-		Node node = new Node();
-		
 		if (node.parseConfig(args) == -1) {
 			System.out.println("Failed to parse config");
-			System.exit(1);
+			System.exit(-1);
 			return;
 		}
 		
 		node.start();
 		
 		
+	}
+	
+	
+	/*
+	 * Takes input file name as argument
+	 */
+	public Node(String filename) {
+		if (filename != null) {
+			File inputfile = new File(filename);
+			try {
+				inputfis = new FileInputStream(inputfile);
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+				inputfis = null;
+			}
+		}
 	}
 	
 	
@@ -190,7 +214,7 @@ public class Node {
         sharedData = new ConcurrentHashMap<String, Datum>();
 
 		//Start the CommandInputThread thread that will eventually spawn MessageDelayerThread Threads
-        cmdin = new CommandInputThread(this);
+        cmdin = new CommandInputThread(this, inputfis);
         
         try {
 			server = new ServerSocket(nodesinfo[myIdx].port);
