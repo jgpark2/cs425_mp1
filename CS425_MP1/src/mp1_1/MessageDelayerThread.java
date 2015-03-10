@@ -60,10 +60,11 @@ public class MessageDelayerThread extends Thread {
             MessageType msg;
             //consuming messages until exit message is received
             while((msg = mq.take()).msg.compareToIgnoreCase("exit") != 0) {
-            	long tosleep = msg.ts - System.currentTimeMillis();
+            	long tosleep = msg.ts - System.currentTimeMillis(); //works for this mp...
+            	//System.out.println("Consumed "+msg.msg + " sleeping"+ tosleep);
             	if (tosleep > 0)
             		Thread.sleep(tosleep);
-            	//System.out.println("Consumed "+msg.msg);
+            	//System.out.println("slept for: "+msg.msg); //Debug check for if msg wasn't affected during sleep
             	//while MessageReceiverThread keeps reading from its input stream...
             	outs.println(msg.msg);
             }

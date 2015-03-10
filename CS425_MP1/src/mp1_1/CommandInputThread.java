@@ -53,7 +53,7 @@ public class CommandInputThread extends Thread {
 			millismaxdelays[i] = new Double(nodesinfo[i].max_delay*1000.0);
 			intmaxdelays[i] = millismaxdelays[i].intValue();
 			mqarr.add(new ArrayBlockingQueue<MessageType>(mqmax));
-			last[i] = new MessageType();
+			last[i] = new MessageType(); //defaults to 0 ts
 		}
 		
 		new Thread(this, "CommandInput").start();
@@ -87,6 +87,8 @@ public class CommandInputThread extends Thread {
         while (msg.msg.compareToIgnoreCase("exit") != 0) {
         	
         	Long now = new Long(0);
+        	
+        	msg = new MessageType("", new Long(0)); //CREATE A NEW MESSAGETYPE OBJECT (and discard the old one)
 
         	try {
 				msg.msg = sysin.readLine();
@@ -106,7 +108,7 @@ public class CommandInputThread extends Thread {
         	//Calculate random delay
 			int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
 			
-			//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
+			//if this message ts is earlier than the last message sent, change this timestamp so that it is later than the last one's
 			msg.ts = new Long(Math.max(now + (long)randint, last[recvIdx].ts.longValue()));
 			
             try {
@@ -119,6 +121,7 @@ public class CommandInputThread extends Thread {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+            
         }
         
         //Send exit message to all channels ?
