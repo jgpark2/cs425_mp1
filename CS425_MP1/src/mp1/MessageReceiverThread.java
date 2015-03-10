@@ -52,14 +52,26 @@ public class MessageReceiverThread extends Thread {
 				if (input.lastIndexOf("get ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
-				//delete key <requestingnodeid> <reqorack> <timestamp>
+				
+				//delete key <timestamp>
+				//since we don't care about consistency here, cmdComplete has already been flagged
 				else if (input.lastIndexOf("delete ") == 0) {
-					node.getCommandInputThread().respondToMessage(input);
+					//Extract key out of msg
+					int i = 7;
+					while (input.charAt(i) != ' ') //move through key
+						i++;
+					
+					String key = input.substring(7, i);
+					
+					node.sharedData.remove(key); //remove key from our replica
+					System.out.println("Key "+key+" deleted");
 				}
+				
 				//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 				else if (input.lastIndexOf("insert ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
+				
 				//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 				else if (input.lastIndexOf("update ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);

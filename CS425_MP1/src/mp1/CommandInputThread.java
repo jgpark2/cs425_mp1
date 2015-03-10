@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /*
@@ -35,6 +36,9 @@ public class CommandInputThread extends Thread {
 	private ArrayBlockingQueue<String> mqleader;
 	private int mqmax = 1023;
 	private MessageType [] last;
+	
+	//Indicates whether the current command is finished executing or not
+	public volatile boolean cmdComplete = false;
     
 
     public CommandInputThread(Node node) {
@@ -104,6 +108,7 @@ public class CommandInputThread extends Thread {
 
         	try {
 				msg.msg = sysin.readLine();
+				cmdComplete = false;
 				msg.ts = System.currentTimeMillis();
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -132,12 +137,18 @@ public class CommandInputThread extends Thread {
         			parseUpdate(msg);
         			break;
         		}
+        		case 5: { //show-all
+        			show_allUtility();
+        			break;
+        		}
         		default: {
         			System.out.println("Message was not correctly fomatted; try again");
         			continue;
         		}
         	}
         	
+        	//do not restart the loop until the command is finished being processed
+        	while (!cmdComplete) {}
         }
         
         //Send exit message to all channels ?
@@ -335,6 +346,11 @@ public class CommandInputThread extends Thread {
 			type = 4;
 		}
 		
+		//show-all utility tool
+		else if (msg.msg.lastIndexOf("show-all") == 0) {
+			type = 5;
+		}
+		
 		msg.msg = adjustedmsg;
 		System.out.println("Exiting parseForIncorrectFormat, msg is "+msg.msg);
 		return type;
@@ -345,17 +361,16 @@ public class CommandInputThread extends Thread {
 	 * If the command is of the form "delete key", this
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
+	 * Since delete consistency can be whatever we want (Piazza @244), we won't
+	 * wait for acks
 	 * This method assumes that parseForIncorrectFormat has already been called
-	 * final format: delete key <requestingnodeid> <reqorack> <timestamp>
+	 * final format: delete key <timestamp>
 	 */
 	private void parseDelete(MessageType msg) {
 		//We want to send this out even if this Node has no replica of the key
 
-		//This format of the message represents a unique identifier for the request
-		msg.msg = msg.msg + " " + nodesinfo[myIdx].id;
-		node.recvacks.put(msg.msg, 3);
-		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
+		this.cmdComplete = true;
 	}
 	
 	
@@ -392,6 +407,7 @@ public class CommandInputThread extends Thread {
 				String key = msg.msg.substring(4, msg.msg.length()-2);
 				Datum value = node.sharedData.get(key);
 				System.out.println("get("+key+") = "+value.value);
+				this.cmdComplete = true;
 				break;
 			}
 			
@@ -406,6 +422,7 @@ public class CommandInputThread extends Thread {
 				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
 				Date curdate = new Date(value.timestamp);
 				System.out.println(format.format(curdate) + ")");
+				this.cmdComplete = true;
 				break;
 			}
 			
@@ -422,6 +439,7 @@ public class CommandInputThread extends Thread {
 			
 			default: {
 				System.out.println("Message was not correctly fomatted; try again");
+				this.cmdComplete = true;
 				return;
 			}
 		}
@@ -478,6 +496,7 @@ public class CommandInputThread extends Thread {
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				node.sharedData.put(key, toinsert);
 				System.out.println("Inserted key "+key);
+				this.cmdComplete = true;
 				return;
 			}
 			
@@ -494,6 +513,7 @@ public class CommandInputThread extends Thread {
 			
 			default: {
 				System.out.println("Message was not correctly fomatted; try again");
+				this.cmdComplete = true;
 				return;
 			}
 		}
@@ -557,6 +577,7 @@ public class CommandInputThread extends Thread {
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				Datum old = node.sharedData.put(key, toinsert);
 				System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				this.cmdComplete = true;
 				return;
 			}
 					
@@ -573,6 +594,7 @@ public class CommandInputThread extends Thread {
 					
 			default: {
 				System.out.println("Message was not correctly fomatted; try again");
+				this.cmdComplete = true;
 				return;
 			}
 		}
@@ -583,6 +605,7 @@ public class CommandInputThread extends Thread {
 		node.recvacks.put(msg.msg, 3);
 		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
+		
 	}
 	
 	
@@ -598,6 +621,7 @@ public class CommandInputThread extends Thread {
 		int recvIdx = parseCommandForRecvIdx(cmd.msg);
 		if (recvIdx < 0) {
 			System.out.println("Message was not correctly fomatted; try again");
+			this.cmdComplete = true;
 			return;
 		}
 		
@@ -611,6 +635,7 @@ public class CommandInputThread extends Thread {
 		SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
 		Date curdate = new Date();
 		System.out.println(format.format(curdate));
+		this.cmdComplete = true;
 	}
 	
 	
@@ -649,17 +674,33 @@ public class CommandInputThread extends Thread {
 		
 		return node.getIndexFromId(id);
 	}
+
+
+	private void show_allUtility() {
+		Set<String> keyset = node.sharedData.keySet();
+		System.out.println("Key-value pairs stored in this replica:");
+		Iterator<String> it = keyset.iterator();
+		while (it.hasNext()) {
+			String key = it.next();
+			Datum value = node.sharedData.get(key);
+			System.out.println(key + ": " + value.value);
+		}
+		this.cmdComplete = true;
+	}
 	
 
 	/*
-	 * When a MessageReceiverThread receives a delete/get/insert/update message,
+	 * When a MessageReceiverThread receives a get/insert/update message,
 	 * this method either sends a reply, updates a key/value, or does nothing
+	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 * Delete messages are taken care of in MessageReceiverThread
 	 */
 	public void respondToMessage(String input) {
 		// TODO Do things with the key/value Dictionary
 		
-		System.out.println("Responded to "+input);
+		String output = input;
 		
+		System.out.println("Responded to "+input);
 	}
 	
 }

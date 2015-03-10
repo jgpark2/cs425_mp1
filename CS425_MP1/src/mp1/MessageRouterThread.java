@@ -147,6 +147,7 @@ public class MessageRouterThread extends Thread {
 		
 		//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 		if (msg.substring(0, 4).compareToIgnoreCase("get ") == 0) {
+			
 			//All get messages that go through CentralServer are requests
 			//(sequential consistency and linearizability need no acks, but do need own req)
 			for (int i=0; i<4; i++) {
@@ -154,31 +155,20 @@ public class MessageRouterThread extends Thread {
 			}
 		}
 		
-		//delete key <requestingnodeid> <reqorack> <timestamp>
+		//delete key <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("delete ") == 0) {
-			
-			//Extract requestingnodeid
-			int idx = 7;
-			while (msg.charAt(idx) != ' ') //move past key
-				idx++;
-			idx++; //move past space between key and requestingnodeid
-			String reqId = msg.substring(idx, idx+1);
-			int reqIdx = centralServer.getIndexFromId(reqId);
-			
-			if (msg.lastIndexOf("req") != -1) { //request, send to all except requestingnode
-				for (int i=0; i<4; i++) {
-					if (i != reqIdx)
-						ret.add(new Integer(i));
-				}
+
+			//Send to all, requestingnode will delete upon receipt of this
+			for (int i=0; i<4; i++) {
+				ret.add(new Integer(i));
 			}
-			
-			else { //ack, send to requestingnode				
-				ret.add(new Integer(reqIdx));
-			}
+
 		}
 		
 		//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
-		else if (msg.substring(0, 7).compareToIgnoreCase("insert ") == 0) {
+		//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
+		else if ( (msg.substring(0, 7).compareToIgnoreCase("insert ") == 0)
+				|| ( msg.substring(0, 7).compareToIgnoreCase("update ") == 0 )) {
 			
 			//Extract requestingnodeid
 			int idx = 7;
@@ -201,12 +191,6 @@ public class MessageRouterThread extends Thread {
 			else { //ack, send to requestingnode
 				ret.add(new Integer(reqIdx));
 			}
-		}
-		
-		//TODO: finish parsing this exactly
-		//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
-		else if (msg.substring(0, 7).compareToIgnoreCase("update ") == 0) {
-			
 		}
 		
 		return ret;
