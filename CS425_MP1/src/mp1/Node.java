@@ -187,6 +187,7 @@ public class Node {
         }
         
         recvacks = new ConcurrentHashMap<String, Integer>();
+        sharedData = new ConcurrentHashMap<String, Datum>();
 
 		//Start the CommandInputThread thread that will eventually spawn MessageDelayerThread Threads
         cmdin = new CommandInputThread(this);

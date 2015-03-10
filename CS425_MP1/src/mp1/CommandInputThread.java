@@ -141,6 +141,10 @@ public class CommandInputThread extends Thread {
         			show_allUtility();
         			break;
         		}
+        		case 6: { //delay T
+        			parseDelay(msg);
+        			break;
+        		}
         		default: {
         			System.out.println("Message was not correctly fomatted; try again");
         			continue;
@@ -214,7 +218,7 @@ public class CommandInputThread extends Thread {
 	 */
 	private int parseForIncorrectFormat(MessageType msg) {
 		
-		System.out.println("Entering parseForIncorrectFormat, msg is "+msg.msg);
+//		System.out.println("Entering parseForIncorrectFormat, msg is "+msg.msg);
 		int type = -1;
 		String adjustedmsg = new String(msg.msg);
 		StringBuilder builder = new StringBuilder();
@@ -351,8 +355,28 @@ public class CommandInputThread extends Thread {
 			type = 5;
 		}
 		
+		//delay T
+		else if (msg.msg.lastIndexOf("delay ") == 0) {
+			boolean hasT = false;
+			builder.append("delay ");
+			int i = 6;
+			while (len > i && msg.msg.charAt(i) == ' ') //move past extra spaces
+				i++;
+			while (len > i && msg.msg.charAt(i) != ' ') { //add T to builder
+				builder.append(msg.msg.charAt(i));
+				hasT = true;
+				i++;
+			}
+			//command does not have all arguments or more info after arguments
+			if (!hasT || i < len)
+				return type;
+				
+			adjustedmsg = builder.toString();
+			type = 6;
+		}
+		
 		msg.msg = adjustedmsg;
-		System.out.println("Exiting parseForIncorrectFormat, msg is "+msg.msg);
+//		System.out.println("Exiting parseForIncorrectFormat, msg is "+msg.msg);
 		return type;
 	}
 	
@@ -406,7 +430,11 @@ public class CommandInputThread extends Thread {
 				//Extract key out of msg
 				String key = msg.msg.substring(4, msg.msg.length()-2);
 				Datum value = node.sharedData.get(key);
-				System.out.println("get("+key+") = "+value.value);
+				if (value == null) //key is not in replica
+					System.out.print("get("+key+") = (NO KEY FOUND)");
+				else
+					System.out.println("get("+key+") = "+value.value);
+				
 				this.cmdComplete = true;
 				break;
 			}
@@ -418,10 +446,16 @@ public class CommandInputThread extends Thread {
 				String key = msg.msg.substring(4, msg.msg.length()-2);
 				Datum value = node.sharedData.get(key);
 				
-				System.out.print("get("+key+") = ("+value.value+", ");
-				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
-				Date curdate = new Date(value.timestamp);
-				System.out.println(format.format(curdate) + ")");
+				if (value == null) //key is not in replica
+					System.out.print("get("+key+") = (NO KEY FOUND)");
+				
+				else {
+					System.out.print("get("+key+") = ("+value.value+", ");
+					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+					Date curdate = new Date(value.timestamp);
+					System.out.println(format.format(curdate) + ")");
+				}
+				
 				this.cmdComplete = true;
 				break;
 			}
@@ -496,6 +530,7 @@ public class CommandInputThread extends Thread {
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				node.sharedData.put(key, toinsert);
 				System.out.println("Inserted key "+key);
+				
 				this.cmdComplete = true;
 				return;
 			}
@@ -576,7 +611,11 @@ public class CommandInputThread extends Thread {
 						
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				Datum old = node.sharedData.put(key, toinsert);
-				System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				if (old == null) //key was not previously in replica
+					System.out.println("Key "+key+" changed from null to "+value);
+				else
+					System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				
 				this.cmdComplete = true;
 				return;
 			}
@@ -676,6 +715,11 @@ public class CommandInputThread extends Thread {
 	}
 
 
+	/*
+	 * If the command is of the form "show-all", this method prints displays all
+	 * the key-value pairs stored at this replica
+	 * This method assumes that parseForIncorrectFormat has already been called
+	 */
 	private void show_allUtility() {
 		Set<String> keyset = node.sharedData.keySet();
 		System.out.println("Key-value pairs stored in this replica:");
@@ -685,6 +729,31 @@ public class CommandInputThread extends Thread {
 			Datum value = node.sharedData.get(key);
 			System.out.println(key + ": " + value.value);
 		}
+		this.cmdComplete = true;
+	}
+
+
+	/*
+	 * If the command is of the form "delay T", this method merely sleeps for
+	 * T seconds (in the form of a decimal) and marks the command complete
+	 * This method assumes that parseForIncorrectFormat has already been called
+	 */
+	private void parseDelay(MessageType msg) {
+		//Extract T
+		String t = msg.msg.substring(6, msg.msg.length());
+		
+		Double tdouble = new Double(t);
+		Double tmillis = new Double(tdouble.doubleValue()*1000.0);
+		long tosleep = tmillis.longValue();
+		
+		if (tosleep > 0) {
+			try {
+				Thread.sleep(tosleep);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		
 		this.cmdComplete = true;
 	}
 	
