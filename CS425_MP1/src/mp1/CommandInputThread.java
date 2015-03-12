@@ -1035,6 +1035,24 @@ public class CommandInputThread extends Thread {
 					//if recvacks has 0 more acks to receive, do nothing
 		
 		
+		//SEARCH
+			//req: respond with an ack of the form
+				//search key <requestingnodeid> <requestnumber> <myNodeId> ack <timestamp>
+				//if this node doesn't have the key in sharedData, put "null" as <myNodeId> (else put this node's id)
+			//ack: look in recvacks to see how many acks we have received with identifier:
+				//search key <requestingnodeid> <requestnumber>
+				//if recvacks has more than 1 more ack to receive, and this ack does not say "null"
+					//store that number decremented in recvacks, store <myNodeId> SOMEWHERE (recvacks?)
+				//if recvacks has more than 1 more ack to receive, and this ack says "null"
+					//store that number decremented in recvacks
+				//if recvacks has 1 ack to receive, store 0 in recvacks and
+					//print out "Key exists in these replicas: "
+					//this Node's id if it has key, then print out <myNodeId> for this ack if it's not "null"
+					//then print out all the nodeids stored SOMEWHERE
+					//mark cmdComplete as true
+
+		
+		
 		//For linearizability: If node is myself...
 			//if "get", print from local map
 			//L: delete requests won't get here, they are handled in MessageReceiverThread, line 59

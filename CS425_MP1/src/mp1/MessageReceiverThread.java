@@ -77,7 +77,7 @@ public class MessageReceiverThread extends Thread {
 					node.getCommandInputThread().respondToMessage(input);
 				}
 				
-				//search key <requestingnodeid> <requestnumber> <reqorack> <timestamp>
+				//search key <requestingnodeid> <requestnumber> <NodeId> <reqorack> <timestamp>
 				else if (input.lastIndexOf("search ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
