@@ -538,12 +538,12 @@ public class CommandInputThread extends Thread {
 		
 		switch (model) {
 			case 1: {
-				//linearizability: send to CentralServer, wait for 3 acks to be received
+				//linearizability: send to CentralServer, wait for 4 acks to be received
 				break;
 			}
 			
 			case 2: {
-				//sequential consistency: send to CentralServer, wait for 3 acks to be received
+				//sequential consistency: send to CentralServer, wait for 4 acks to be received
 				break;
 			}
 			
@@ -597,7 +597,7 @@ public class CommandInputThread extends Thread {
 		//Both linearizability and sequential consistency run this:
 		//This format of the message represents a unique identifier for the request
 		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-		node.recvacks.put(msg.msg, 3);
+		node.recvacks.put(msg.msg, 4);
 		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
 		
@@ -651,6 +651,7 @@ public class CommandInputThread extends Thread {
 				String value = builder.toString();
 						
 				Datum toinsert = new Datum(value, msg.ts.longValue());
+				//TODO: change from just inserting to sending out to other Nodes
 				Datum old = node.sharedData.put(key, toinsert);
 				if (old == null) //key was not previously in replica
 					System.out.println("Key "+key+" changed from null to "+value);
@@ -826,7 +827,153 @@ public class CommandInputThread extends Thread {
 	public void respondToMessage(String input) {
 		// TODO Do things with the key/value Dictionary
 		
-		//parse inputs...
+		//It's easier to parse out the type of message first (get, update, etc.)
+		//  than it is to parse out the consistency model first (see parseForIncorrectFormat)
+		
+		//All consistency models EXCEPT eventual consistency:
+			//if the key does not exist and you attempt an update, report an error (Piazza @236)
+		
+		//GET
+			//linearizability:
+				//req: if requesting node is this node, then print out "get(<key>) = <value>" from sharedData
+					//if requesting node is not this node, do nothing
+					//mark cmdComplete as true
+				//ack: not applicable, see linearizable totally-ordered broadcast algorithm
+		
+			//sequential consistency: not applicable, requesting node just prints out its own value
+		
+			//eventual consistency R=1:
+				//req: send requestingnode (along peer connection) an ack of form
+					//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
+					//if this node doesn't have the key, put "null" as <value> and <associatedvaluetimestamp>
+				//ack: look in recvacks to see how many acks we have received with identifier:
+					//get key model <requestingnodeid> <requestnumber>
+					//if recvacks has 1 more ack to receive (R=1) and ack doesn't have "null" as value,
+						//store 0 in recvacks and print
+						//"get(<key>) = (<value>, <associatedvaluetimestamp>)"
+						//mark cmdComplete as true
+					//if recvacks has 1 more ack to receive (R=1) and ack has "null" as value,
+						//store 1 more null ack received SOMEWHERE
+						//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
+							//mark cmdComplete as true
+					//if recvacks has 0 more acks to receive, do nothing
+		
+			//eventual consistency R=2:
+				//req: same as req for eventual consistency R=1
+				//ack: look in recvacks to see how many acks we have received with identifier:
+					//get key model <requestingnodeid> <requestnumber>
+					//if recvacks has 2 more acks to receive (R=2) and this ack doesn't have "null" as value,
+						//store 1 in recvacks and
+						//store the received (value,associatedtimestamp) SOMEWHERE (in recvacks?)
+					//if recvacks has 2 more acks to receive (R=2) and this ack has "null" as value,
+						//store 1 more null ack received SOMEWHERE
+						//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
+							//mark cmdComplete as true
+					//if recvacks has 1 more ack to receive and this ack doesn't have "null" as value,
+						//store 0 in recvacks and compare
+						//the previously received ack (stored SOMEWHERE) and the current received one
+						//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the more recent one
+						//print "<value>, <timestamp>" for the less recent one
+						//mark cmdComplete as true
+					//if recvacks has 1 more ack to receive and this ack has "null" as value,
+						//if 1 such null ack has already been received:
+							//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the non-null ack SOMEWHERE
+							//mark cmdComplete as true
+						//if no such null acks have been received yet:
+							//store 1 more null ack received SOMEWHERE
+		
+		
+		//DELETE: not applicable, these are handled in MessageReceiverThread directly, line 59
+		
+		//SEND: not applicable, these are handled in MessageReceiverThread and need no response
+		
+		//INSERT
+			//linearizability:
+				//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
+					//insert key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+				//ack: look in recvacks to see how many acks we have received with identifier:
+					//insert key value model <requestingnodeid> <requestnumber>
+					//if recvacks has more than 1 more acks to receive, store that number decremented
+					//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Inserted key <key>"
+						//mark cmdComplete as true
+		
+			//sequential consistency: same as linearizability
+		
+			//eventual consistency W=1: not applicable, taken care of in parseInsert
+		
+			//eventual consistency W=2:
+				//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+					//send an ack to requesting node of form (don't have to append any timestamp)
+					//insert key value model <requestingnodeid> <requestnumber> ack <timestamp>
+				//ack: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+					//mark cmdComplete as true
+		
+		
+		//UPDATE
+			//linearizability:
+				//req: if the key exists in this Node's sharedData,
+					//update the key and value and attached timestamp in sharedData, print
+					//"Key <key> changed from <old value> to <value>"
+					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
+					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+				//req: if the key does not exist in this Node's sharedData,
+					//print "Key <key> does not exist in this replica, update attempt failed"
+					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
+					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+				//ack: look in recvacks to see how many acks we have received with identifier:
+					//update key value model <requestingnodeid> <requestnumber>
+					//if recvacks has more than 1 more acks to receive, store that number decremented
+					//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Key <key> updated to <value>"
+						//mark cmdComplete as true
+		
+			//sequential consistency: same as linearizability
+		
+			//eventual consistency W=1:
+				//req: if this Node's sharedData has a copy of the key, update it to value
+					//print "Key <key> changed from <oldvalue> to <value>"
+					//respond to requestingnode on peer channel with an ack of the form
+					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+				//req: if this Node's sharedData does not have a copy of the key,
+					//print "Key <key> does not exist in this replica, update attempt failed"
+					//respond to requestingnode on peer channel with an ack of the form
+					//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+				//ack: look in recvacks to see how many acks we have received with identifier:
+					//update key model <requestingnodeid> <requestnumber>
+					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
+						//store 0 in recvacks and print "Key <key> updated to <value>"
+						//mark cmdComplete as true
+					//if recvacks has 1 more ack to receive, and this ack says null after ack
+						//store 1 more null ack received SOMEWHERE
+						//if 3 such null acks have been received, insert this key/value/<timestamp> into sharedData
+							//print "Key <key> changed from null to <value>"
+							//mark cmdComplete as true
+					//if recvacks has 0 more acks to receive, do nothing
+		
+			//eventual consistecy W=2:
+				//req: same as eventual consistency W=1
+
+				//ack: look in recvacks to see how many acks we have received with identifier:
+					//update key model <requestingnodeid> <requestnumber>
+					//if recvacks has 2 more acks to receive, and this ack does not say null after ack
+						//store 1 in recvacks
+					//if recvacks has 2 more acks to receive, and this ack says null after ack
+						//store 1 more null ack received SOMEWHERE
+						//if 3 such null acks have been received, insert this key/value/<timestamp> into sharedData
+							//print "Key <key> changed from null to <value>"
+							//send a special message to another to create this key/value/<timestamp> into their sharedData
+							//wait for them to send an ack back, then print "Key <key> updated to <value>"
+							//then mark cmdComplete as true
+					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
+						//store 0 in recvacks, print "Key <key> updated to <value>"
+						//mark cmdComplete as true
+					//if recvacks has 1 more ack to receive, and this ack says null after ack
+						//store 1 more null ack received SOMEWHERE
+						//if 2 such null acks have now been received, insert this key/value/<timestamp> into sharedData
+							//print "Key <key> updated to <value>"
+							//mark cmdComplete as true
+					//if recvacks has 0 more acks to receive, do nothing
+		
 		
 		//For linearizability: If node is myself...
 			//if "get", print from local map
@@ -836,10 +983,6 @@ public class CommandInputThread extends Thread {
 		//Eventual consistency (worry about this last!!)
 			//send acks over peer channels, not leader channel
 			//if not enough copies exist in the system on an update req, add enough copies to the system
-		
-		//All consistency models EXCEPT eventual consistency:
-			//if the key does not exist and you attempt an update, report an error (Piazza @236)
-		
 		
 		String output = input;
 		

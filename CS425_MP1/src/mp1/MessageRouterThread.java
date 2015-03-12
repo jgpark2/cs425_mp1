@@ -185,11 +185,9 @@ public class MessageRouterThread extends Thread {
 			String reqId = msg.substring(idx, idx+1);
 			int reqIdx = centralServer.getIndexFromId(reqId);
 			
-			if (msg.lastIndexOf("req") != -1) { //request, send to all except requestingnode
-				for (int i=0; i<4; i++) {
-					if (i != reqIdx)
-						ret.add(new Integer(i));
-				}
+			if (msg.lastIndexOf("req") != -1) { //request, send to all
+				for (int i=0; i<4; i++)
+					ret.add(new Integer(i));
 			}
 			
 			else { //ack, send to requestingnode
