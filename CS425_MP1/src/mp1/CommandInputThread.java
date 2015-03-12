@@ -620,12 +620,12 @@ public class CommandInputThread extends Thread {
 				
 		switch (model) {
 			case 1: {
-				//linearizability: send to CentralServer, wait for 3 acks to be received
+				//linearizability: send to CentralServer, wait for 4 acks to be received
 				break;
 			}
 					
 			case 2: {
-				//sequential consistency: send to CentralServer, wait for 3 acks to be received
+				//sequential consistency: send to CentralServer, wait for 4 acks to be received
 				break;
 			}
 					
@@ -640,6 +640,17 @@ public class CommandInputThread extends Thread {
 					i++;
 				}
 				String key = builder.toString();
+				
+				if (node.sharedData.get(key) == null) { //try to update in other Nodes
+					//This format of the message represents a unique identifier for the request
+					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+					node.recvacks.put(msg.msg, 1);
+					msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+					for (int idx=0; idx<4; idx++)
+						addMessageToNodeQueue(msg, idx);
+
+					return;
+				}
 						
 				//Extract value out of msg
 				builder = new StringBuilder();
@@ -651,26 +662,55 @@ public class CommandInputThread extends Thread {
 				String value = builder.toString();
 						
 				Datum toinsert = new Datum(value, msg.ts.longValue());
-				//TODO: change from just inserting to sending out to other Nodes
 				Datum old = node.sharedData.put(key, toinsert);
-				if (old == null) //key was not previously in replica
-					System.out.println("Key "+key+" changed from null to "+value);
-				else
-					System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				System.out.println("Key "+key+" changed from "+old.value+" to "+value);
 				
 				this.cmdComplete = true;
 				return;
 			}
 					
 			case 4: {
-				//eventual consistency, W=2: send to 1 other Node, wait for 1 ack
+				//eventual consistency, W=2: update in 2 Nodes
 				
-				//This format of the message represents a unique identifier for the request
-				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 1);
+				//Extract key out of msg
+				StringBuilder builder = new StringBuilder();
+				int i = 7;
+				while (msg.msg.charAt(i) != ' ') { //move through key
+					builder.append(msg.msg.charAt(i));
+					i++;
+				}
+				String key = builder.toString();
+				
+				if (node.sharedData.get(key) == null) { //try to update in other Nodes
+					//This format of the message represents a unique identifier for the request
+					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+					node.recvacks.put(msg.msg, 2);
+				}
+				else { //update in our Node and one other Node
+					//Extract value out of msg
+					builder = new StringBuilder();
+					i++; //move past space between key and value
+					while (msg.msg.charAt(i) != ' ') { //move through value
+						builder.append(msg.msg.charAt(i));
+						i++;
+					}
+					String value = builder.toString();
+							
+					Datum toinsert = new Datum(value, msg.ts.longValue());
+					Datum old = node.sharedData.put(key, toinsert);
+					System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+					
+					//This format of the message represents a unique identifier for the request
+					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+					node.recvacks.put(msg.msg, 1);
+				}
+				
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
-				addMessageToNodeQueue(msg, (myIdx + 1)%4);
-				return;
+				for (int idx=0; idx<4; idx++) {
+					if (idx != myIdx)
+						addMessageToNodeQueue(msg, idx);
+				}
+				
 			}
 					
 			default: {
@@ -681,9 +721,23 @@ public class CommandInputThread extends Thread {
 		}
 				
 		//Both linearizability and sequential consistency run this:
+		//Extract key out of msg
+		StringBuilder builder = new StringBuilder();
+		int i = 7;
+		while (msg.msg.charAt(i) != ' ') { //move through key
+			builder.append(msg.msg.charAt(i));
+			i++;
+		}
+		String key = builder.toString();
+
+		if (node.sharedData.get(key) == null) { //key does not exist in system
+			System.out.println("Key "+key+" does not exist in system, attempted update failed");
+			return;
+		}
+		
 		//This format of the message represents a unique identifier for the request
 		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-		node.recvacks.put(msg.msg, 3);
+		node.recvacks.put(msg.msg, 4);
 		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
 		
@@ -855,6 +909,7 @@ public class CommandInputThread extends Thread {
 					//if recvacks has 1 more ack to receive (R=1) and ack has "null" as value,
 						//store 1 more null ack received SOMEWHERE
 						//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
+							//store 0 in recvacks
 							//mark cmdComplete as true
 					//if recvacks has 0 more acks to receive, do nothing
 		
@@ -868,6 +923,7 @@ public class CommandInputThread extends Thread {
 					//if recvacks has 2 more acks to receive (R=2) and this ack has "null" as value,
 						//store 1 more null ack received SOMEWHERE
 						//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
+							//store 0 in recvacks
 							//mark cmdComplete as true
 					//if recvacks has 1 more ack to receive and this ack doesn't have "null" as value,
 						//store 0 in recvacks and compare
@@ -878,6 +934,7 @@ public class CommandInputThread extends Thread {
 					//if recvacks has 1 more ack to receive and this ack has "null" as value,
 						//if 1 such null ack has already been received:
 							//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the non-null ack SOMEWHERE
+							//store 0 in recvacks
 							//mark cmdComplete as true
 						//if no such null acks have been received yet:
 							//store 1 more null ack received SOMEWHERE
@@ -912,13 +969,8 @@ public class CommandInputThread extends Thread {
 		
 		//UPDATE
 			//linearizability:
-				//req: if the key exists in this Node's sharedData,
-					//update the key and value and attached timestamp in sharedData, print
+				//req: update the key and value and attached timestamp in sharedData, print
 					//"Key <key> changed from <old value> to <value>"
-					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
-					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-				//req: if the key does not exist in this Node's sharedData,
-					//print "Key <key> does not exist in this replica, update attempt failed"
 					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
 					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
 				//ack: look in recvacks to see how many acks we have received with identifier:
@@ -935,7 +987,6 @@ public class CommandInputThread extends Thread {
 					//respond to requestingnode on peer channel with an ack of the form
 					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
 				//req: if this Node's sharedData does not have a copy of the key,
-					//print "Key <key> does not exist in this replica, update attempt failed"
 					//respond to requestingnode on peer channel with an ack of the form
 					//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
 				//ack: look in recvacks to see how many acks we have received with identifier:
@@ -945,8 +996,9 @@ public class CommandInputThread extends Thread {
 						//mark cmdComplete as true
 					//if recvacks has 1 more ack to receive, and this ack says null after ack
 						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have been received, insert this key/value/<timestamp> into sharedData
-							//print "Key <key> changed from null to <value>"
+						//if 3 such null acks have been received,
+							//print "Key <key> does not exist in system, attempted update failed"
+							//store 0 in recvacks
 							//mark cmdComplete as true
 					//if recvacks has 0 more acks to receive, do nothing
 		
@@ -959,18 +1011,26 @@ public class CommandInputThread extends Thread {
 						//store 1 in recvacks
 					//if recvacks has 2 more acks to receive, and this ack says null after ack
 						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have been received, insert this key/value/<timestamp> into sharedData
-							//print "Key <key> changed from null to <value>"
-							//send a special message to another to create this key/value/<timestamp> into their sharedData
-							//wait for them to send an ack back, then print "Key <key> updated to <value>"
+						//if 3 such null acks have been received, print
+							//"Key <key> does not exist in system, attempted update failed"
+							//store 0 in recvacks
 							//then mark cmdComplete as true
 					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
 						//store 0 in recvacks, print "Key <key> updated to <value>"
 						//mark cmdComplete as true
 					//if recvacks has 1 more ack to receive, and this ack says null after ack
 						//store 1 more null ack received SOMEWHERE
-						//if 2 such null acks have now been received, insert this key/value/<timestamp> into sharedData
+						//if 3 such null acks have now been received, send out a special message to 1 Node
+							//telling them to insert this key/value/timestamp
+							//wait until you have received the ack for this, then print
+							//"Key <key> updated to <value>"
+							//store 0 in recvacks
+							//mark cmdComplete as true
+						//if 2 such null acks have now been received and sharedData does not have this key,
+							//insert this key/value/<timestamp> into sharedData
+							//print "Key <key> changed from null to <value>"
 							//print "Key <key> updated to <value>"
+							//store 0 in recvacks
 							//mark cmdComplete as true
 					//if recvacks has 0 more acks to receive, do nothing
 		
