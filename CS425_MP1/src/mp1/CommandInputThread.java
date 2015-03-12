@@ -530,50 +530,60 @@ public class CommandInputThread extends Thread {
 	 * final format: insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseInsert(MessageType msg) {
+		node.reqcnt++;
+		
 		//Extract model out of msg
 		String modelstr = msg.msg.substring(msg.msg.length()-1);
 		int model = Integer.parseInt(modelstr);
 		
-		node.reqcnt++;
+		//Extract key out of msg
+		StringBuilder builder = new StringBuilder();
+		int i = 7;
+		while (msg.msg.charAt(i) != ' ') { //move through key
+			builder.append(msg.msg.charAt(i));
+			i++;
+		}
+		String key = builder.toString();
+		
+		//Extract value out of msg
+		builder = new StringBuilder();
+		i++; //move past space between key and value
+		while (msg.msg.charAt(i) != ' ') { //move through value
+			builder.append(msg.msg.charAt(i));
+			i++;
+		}
+		String value = builder.toString();
 		
 		switch (model) {
 			case 1: {
 				//linearizability: send to CentralServer, wait for 4 acks to be received
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, 4);
+				msg.msg = msg.msg + " " + "req";
+				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				break;
 			}
 			
 			case 2: {
 				//sequential consistency: send to CentralServer, wait for 4 acks to be received
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, 4);
+				msg.msg = msg.msg + " " + "req";
+				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				break;
 			}
 			
 			case 3: {
 				//eventual consistency, W=1: send to 1 replica (ours) (Piazza post @178)
 				
-				//Extract key out of msg
-				StringBuilder builder = new StringBuilder();
-				int i = 7;
-				while (msg.msg.charAt(i) != ' ') { //move through key
-					builder.append(msg.msg.charAt(i));
-					i++;
-				}
-				String key = builder.toString();
-				
-				//Extract value out of msg
-				builder = new StringBuilder();
-				i++; //move past space between key and value
-				while (msg.msg.charAt(i) != ' ') { //move through value
-					builder.append(msg.msg.charAt(i));
-					i++;
-				}
-				String value = builder.toString();
-				
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				node.sharedData.put(key, toinsert);
 				System.out.println("Inserted key "+key);
 				
 				this.cmdComplete = true;
-				return;
+				break;
 			}
 			
 			case 4: {
@@ -584,7 +594,7 @@ public class CommandInputThread extends Thread {
 				node.recvacks.put(msg.msg, 1);
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
 				addMessageToNodeQueue(msg, (myIdx + 1)%4);
-				return;
+				break;
 			}
 			
 			default: {
@@ -594,12 +604,11 @@ public class CommandInputThread extends Thread {
 			}
 		}
 		
-		//Both linearizability and sequential consistency run this:
-		//This format of the message represents a unique identifier for the request
-		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-		node.recvacks.put(msg.msg, 4);
-		msg.msg = msg.msg + " " + "req";
-		addMessageToLeaderQueue(msg); //this method adds the timestamp
+		//In addition, regardless of the consistency model, this insert should occur in globalData
+		//addMessageToLeaderQueue adds the timestamp of invocation of this insert
+		MessageType writeglobal = new MessageType("", msg.ts);
+		writeglobal.msg = "writeglobal "+key+" "+value;
+		addMessageToLeaderQueue(writeglobal);
 		
 	}
 
@@ -617,6 +626,25 @@ public class CommandInputThread extends Thread {
 		int model = Integer.parseInt(modelstr);
 				
 		node.reqcnt++;
+		
+		//Extract key out of msg
+		StringBuilder builder = new StringBuilder();
+		int i = 7;
+		while (msg.msg.charAt(i) != ' ') { //move through key
+			builder.append(msg.msg.charAt(i));
+			i++;
+		}
+		String key = builder.toString();
+		
+		//Extract value out of msg
+		builder = new StringBuilder();
+		i++; //move past space between key and value
+		while (msg.msg.charAt(i) != ' ') { //move through value
+			builder.append(msg.msg.charAt(i));
+			i++;
+		}
+		String value = builder.toString();
+		
 				
 		switch (model) {
 			case 1: {
@@ -632,15 +660,6 @@ public class CommandInputThread extends Thread {
 			case 3: {
 				//eventual consistency, W=1: send to 1 replica (ours) (Piazza post @178)
 				
-				//Extract key out of msg
-				StringBuilder builder = new StringBuilder();
-				int i = 7;
-				while (msg.msg.charAt(i) != ' ') { //move through key
-					builder.append(msg.msg.charAt(i));
-					i++;
-				}
-				String key = builder.toString();
-				
 				if (node.sharedData.get(key) == null) { //try to update in other Nodes
 					//This format of the message represents a unique identifier for the request
 					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
@@ -652,18 +671,13 @@ public class CommandInputThread extends Thread {
 					return;
 				}
 						
-				//Extract value out of msg
-				builder = new StringBuilder();
-				i++; //move past space between key and value
-				while (msg.msg.charAt(i) != ' ') { //move through value
-					builder.append(msg.msg.charAt(i));
-					i++;
-				}
-				String value = builder.toString();
-						
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				Datum old = node.sharedData.put(key, toinsert);
 				System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				
+				MessageType writeglobal = new MessageType("", msg.ts);
+				writeglobal.msg = "writeglobal "+key+" "+value;
+				addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
 				
 				this.cmdComplete = true;
 				return;
@@ -672,29 +686,12 @@ public class CommandInputThread extends Thread {
 			case 4: {
 				//eventual consistency, W=2: update in 2 Nodes
 				
-				//Extract key out of msg
-				StringBuilder builder = new StringBuilder();
-				int i = 7;
-				while (msg.msg.charAt(i) != ' ') { //move through key
-					builder.append(msg.msg.charAt(i));
-					i++;
-				}
-				String key = builder.toString();
-				
 				if (node.sharedData.get(key) == null) { //try to update in other Nodes
 					//This format of the message represents a unique identifier for the request
 					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
 					node.recvacks.put(msg.msg, 2);
 				}
 				else { //update in our Node and one other Node
-					//Extract value out of msg
-					builder = new StringBuilder();
-					i++; //move past space between key and value
-					while (msg.msg.charAt(i) != ' ') { //move through value
-						builder.append(msg.msg.charAt(i));
-						i++;
-					}
-					String value = builder.toString();
 							
 					Datum toinsert = new Datum(value, msg.ts.longValue());
 					Datum old = node.sharedData.put(key, toinsert);
@@ -721,15 +718,6 @@ public class CommandInputThread extends Thread {
 		}
 				
 		//Both linearizability and sequential consistency run this:
-		//Extract key out of msg
-		StringBuilder builder = new StringBuilder();
-		int i = 7;
-		while (msg.msg.charAt(i) != ' ') { //move through key
-			builder.append(msg.msg.charAt(i));
-			i++;
-		}
-		String key = builder.toString();
-
 		if (node.sharedData.get(key) == null) { //key does not exist in system
 			System.out.println("Key "+key+" does not exist in system, attempted update failed");
 			return;
@@ -740,6 +728,9 @@ public class CommandInputThread extends Thread {
 		node.recvacks.put(msg.msg, 4);
 		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
+		MessageType writeglobal = new MessageType("", msg.ts);
+		writeglobal.msg = "writeglobal "+key+" "+value;
+		addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
 		
 	}
 	
@@ -888,9 +879,8 @@ public class CommandInputThread extends Thread {
 			//if the key does not exist and you attempt an update, report an error (Piazza @236)
 		
 		//GET
-			//linearizability:
-				//req: if requesting node is this node, then print out "get(<key>) = <value>" from sharedData
-					//if requesting node is not this node, do nothing
+			//linearizability: (the request only gets sent back to the requestingNode)
+				//req: print out "get(<key>) = <value>" from sharedData
 					//mark cmdComplete as true
 				//ack: not applicable, see linearizable totally-ordered broadcast algorithm
 		
@@ -993,6 +983,7 @@ public class CommandInputThread extends Thread {
 					//update key model <requestingnodeid> <requestnumber>
 					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
 						//store 0 in recvacks and print "Key <key> updated to <value>"
+						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
 						//mark cmdComplete as true
 					//if recvacks has 1 more ack to receive, and this ack says null after ack
 						//store 1 more null ack received SOMEWHERE
@@ -1017,6 +1008,7 @@ public class CommandInputThread extends Thread {
 							//then mark cmdComplete as true
 					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
 						//store 0 in recvacks, print "Key <key> updated to <value>"
+						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
 						//mark cmdComplete as true
 					//if recvacks has 1 more ack to receive, and this ack says null after ack
 						//store 1 more null ack received SOMEWHERE
@@ -1025,12 +1017,14 @@ public class CommandInputThread extends Thread {
 							//wait until you have received the ack for this, then print
 							//"Key <key> updated to <value>"
 							//store 0 in recvacks
+							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
 							//mark cmdComplete as true
 						//if 2 such null acks have now been received and sharedData does not have this key,
 							//insert this key/value/<timestamp> into sharedData
 							//print "Key <key> changed from null to <value>"
 							//print "Key <key> updated to <value>"
 							//store 0 in recvacks
+							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
 							//mark cmdComplete as true
 					//if recvacks has 0 more acks to receive, do nothing
 		
@@ -1050,6 +1044,14 @@ public class CommandInputThread extends Thread {
 					//this Node's id if it has key, then print out <myNodeId> for this ack if it's not "null"
 					//then print out all the nodeids stored SOMEWHERE
 					//mark cmdComplete as true
+		
+		
+		//REPAIR: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
+			//for every key in the message
+				//if it's not in this Node's sharedData
+				//or its associated timestamp in sharedData is less recent than the one in the message
+					//update sharedData with the message's value and associated timestamp
+				//else this Node's sharedData has the more recent write info, so do nothing
 
 		
 		

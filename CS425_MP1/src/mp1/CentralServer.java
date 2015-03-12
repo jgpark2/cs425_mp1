@@ -10,6 +10,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 /*
  * CentralServer: represents the central leader in our distributed system
@@ -29,6 +30,10 @@ public class CentralServer {
 	private MessageRouterThread router; //this will create the MessageDelayerThreads on Socket connection
 	private MessageRelayThread [] receivers; //spawned from CentralServer
 	private MessageDelayerThread [] senders; //spawned from MessageRouterThread
+	private RepairThread repair; //spawned from CentralServer
+	
+	
+	public ConcurrentHashMap<String, Datum> globalData;
 
 	
 	public static void main(String[] args) {
@@ -156,9 +161,11 @@ public class CentralServer {
         }
         
         mqin = new ArrayBlockingQueue<String>(mqmax);
+        globalData = new ConcurrentHashMap<String, Datum>();
 
 		//Start the MessageRouterThread thread that will eventually spawn 3 MessageDelayerThread Threads (sockets)
         router = new MessageRouterThread(this, mqin, mqmax);
+        
     	
         try {
 			server = new ServerSocket(leaderInfo.port);
@@ -190,6 +197,9 @@ public class CentralServer {
 				e.printStackTrace();
             }
         }
+        
+        //Start the RepairThread after the CentralServer and Nodes are all completely started
+        repair = new RepairThread(this);
 		
 	}
 	

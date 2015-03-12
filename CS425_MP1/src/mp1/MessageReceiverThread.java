@@ -81,6 +81,11 @@ public class MessageReceiverThread extends Thread {
 				else if (input.lastIndexOf("search ") == 0) {
 					node.getCommandInputThread().respondToMessage(input);
 				}
+				
+				//repair <key> <value> <associatedtimestamp> ...
+				else if (input.lastIndexOf("repair") == 0) {
+					node.getCommandInputThread().respondToMessage(input);
+				}
 
 				//send message destination, simply print out
 				else {

@@ -152,11 +152,16 @@ public class MessageRouterThread extends Thread {
 		//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 		if (msg.substring(0, 4).compareToIgnoreCase("get ") == 0) {
 			
-			//All get messages that go through CentralServer are requests
-			//(sequential consistency and linearizability need no acks, but do need own req)
-			for (int i=0; i<4; i++) {
-				ret.add(new Integer(i));
-			}
+			//Extract requestingnodeid
+			int idx = 4;
+			while (msg.charAt(idx) != ' ') //move past key
+				idx++;
+			idx += 3; //move past space,model,space
+			String reqId = msg.substring(idx, idx+1);
+			int reqIdx = centralServer.getIndexFromId(reqId);
+			
+			//Since the requestingNode is the only one that does anything with this message...
+			ret.add(new Integer(reqIdx));
 		}
 		
 		//delete key <timestamp>
@@ -166,6 +171,17 @@ public class MessageRouterThread extends Thread {
 			for (int i=0; i<4; i++) {
 				ret.add(new Integer(i));
 			}
+			
+			//In addition, this means we should delete the key from globalData
+			//Extract key out of msg
+			StringBuilder builder = new StringBuilder();
+			int i = 7;
+			while (msg.charAt(i) != ' ') { //move through key
+				builder.append(msg.charAt(i));
+				i++;
+			}
+			String key = builder.toString();
+			centralServer.globalData.remove(key);
 
 		}
 		
@@ -217,6 +233,45 @@ public class MessageRouterThread extends Thread {
 			else { //ack, send to requestingnode
 				ret.add(new Integer(reqIdx));
 			}
+		}
+		
+		//writeglobal <key> <value> <associatedtimestamp> <timestamp>
+		else if (msg.substring(0, 12).compareToIgnoreCase("writeglobal ") == 0) {
+
+			//Extract key out of msg
+			StringBuilder builder = new StringBuilder();
+			int i = 12;
+			while (msg.charAt(i) != ' ') { //move through key
+				builder.append(msg.charAt(i));
+				i++;
+			}
+			String key = builder.toString();
+			
+			//Extract value out of msg
+			builder = new StringBuilder();
+			i++; //move past space between key and value
+			while (msg.charAt(i) != ' ') { //move through value
+				builder.append(msg.charAt(i));
+				i++;
+			}
+			String value = builder.toString();
+			
+			//Extract associated timestamp out of msg
+			builder = new StringBuilder();
+			i++; //move past space between value and timestamp
+			while (msg.charAt(i) != ' ') { //move through timestamp
+				builder.append(msg.charAt(i));
+				i++;
+			}
+			long ts = Long.parseLong(builder.toString());
+			
+			Datum oldvalue = centralServer.globalData.get(key);
+			
+			if (oldvalue == null || oldvalue.timestamp < ts) {
+				centralServer.globalData.put(key, new Datum(value,ts));
+			}
+			
+			//this message is for the leader only; don't add anything to ret
 		}
 		
 		return ret;
