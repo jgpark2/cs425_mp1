@@ -529,7 +529,7 @@ public class CommandInputThread extends Thread {
 			}
 			
 			default: {
-				System.out.println("Message was not correctly fomatted; try again");
+				System.out.println("Message was not correctly fomatted in parseGet; try again");
 				this.cmdComplete = true;
 				return;
 			}
@@ -634,7 +634,7 @@ public class CommandInputThread extends Thread {
 			}
 			
 			default: {
-				System.out.println("Message was not correctly fomatted; try again");
+				System.out.println("Message was not correctly fomatted in parseInsert; try again");
 				this.cmdComplete = true;
 				return;
 			}
@@ -679,8 +679,7 @@ public class CommandInputThread extends Thread {
 			builder.append(msg.msg.charAt(i));
 			i++;
 		}
-		String value = builder.toString();
-		
+		String value = builder.toString();		
 				
 		switch (model) {
 			case 1: {
@@ -753,6 +752,7 @@ public class CommandInputThread extends Thread {
 						addMessageToNodeQueue(msg, idx);
 				}
 				
+				return;
 			}
 					
 			default: {
@@ -819,12 +819,12 @@ public class CommandInputThread extends Thread {
 	private int parseCommandForRecvIdx(String cmd) {
 		int len;
 		if ((len = cmd.length()) < 6) {
-			System.out.println("cmd was too short");
+			//System.out.println("cmd was too short");
 			return -1;
 		}
 		
 		if (cmd.charAt(len-2) != ' ') {
-			System.out.println("cmd did not have space");
+			//System.out.println("cmd did not have space");
 			return -1;
 		}
 		
@@ -835,7 +835,7 @@ public class CommandInputThread extends Thread {
 		if (id.compareToIgnoreCase("A")!=0 && id.compareToIgnoreCase("B")!=0
 				&& id.compareToIgnoreCase("C")!=0 && id.compareToIgnoreCase("D")!=0) {
 			System.out.println("Server id must be one of: A,B,C,D");
-			System.out.println(" cmd did not have serverid");
+			//System.out.println(" cmd did not have serverid");
 			return -1;
 		}
 		
@@ -967,6 +967,8 @@ public class CommandInputThread extends Thread {
 					//mark cmdComplete as true
 				//if no such null acks have been received yet:
 					//store 1 more null ack received in recvacks' nullacks ArrayList
+		
+		System.out.println("Received get message: "+input);
 	}
 	
 	
@@ -1005,6 +1007,7 @@ public class CommandInputThread extends Thread {
 					//print "Inserted key <key>"
 					//mark cmdComplete as true
 				//if recvacks has 0, do nothing
+		System.out.println("Received insert message: "+input);
 	}
 	
 	
@@ -1085,6 +1088,7 @@ public class CommandInputThread extends Thread {
 						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
 						//mark cmdComplete as true
 				//if recvacks has 0 more acks to receive, do nothing
+		System.out.println("Received update message: "+input);
 	}
 	
 	
@@ -1110,6 +1114,7 @@ public class CommandInputThread extends Thread {
 				//this Node's id if it has key, then print out <myNodeId> for this ack if it's not "null"
 				//then print out all the nodeids stored in recvacks' validacks ArrayList
 				//mark cmdComplete as true
+		System.out.println("Received search message: "+input);
 	}
 	
 	
@@ -1127,6 +1132,7 @@ public class CommandInputThread extends Thread {
 			//or its associated timestamp in sharedData is less recent than the one in the message
 				//update sharedData with the message's value and associated timestamp
 			//else this Node's sharedData has the more recent write info, so do nothing
+		//System.out.println("Received repair message: "+input);
 	}
 	
 }

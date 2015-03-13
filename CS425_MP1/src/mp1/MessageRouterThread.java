@@ -259,7 +259,7 @@ public class MessageRouterThread extends Thread {
 			//Extract associated timestamp out of msg
 			builder = new StringBuilder();
 			i++; //move past space between value and timestamp
-			while (msg.charAt(i) != ' ') { //move through timestamp
+			while (i < msg.length() && msg.charAt(i) != ' ') { //move through timestamp
 				builder.append(msg.charAt(i));
 				i++;
 			}
