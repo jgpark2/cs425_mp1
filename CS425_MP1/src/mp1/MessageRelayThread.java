@@ -38,7 +38,7 @@ public class MessageRelayThread extends Thread {
 	public void run() {
 		
 		try {
-			//while Node keeps writing to its output stream...
+			//while MessageSenderThread keeps writing to its output stream...
 			String input = "";
 			while ((input = ins.readLine()) != null)
 				mqin.put(input);

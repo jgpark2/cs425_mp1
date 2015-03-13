@@ -44,7 +44,7 @@ public class MessageReceiverThread extends Thread {
 		//With CentralServer
 		String input = "";
 		try {
-			//while CentralServer keeps writing to its output stream...
+			//while CentralServer or a Node keeps writing to its output stream...
 			while ((input = ins.readLine()) != null) {
 				
 				//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
@@ -84,6 +84,11 @@ public class MessageReceiverThread extends Thread {
 				//repair <key> <value> <associatedtimestamp> ...
 				else if (input.lastIndexOf("repair") == 0) {
 					node.getCommandInputThread().respondToRepairMessage(input);
+				}
+				
+				//copy <key> <value> <requestingnodeid> <requestnumber> <reqorack> <timestamp>
+				else if (input.lastIndexOf("copy ") == 0) {
+					node.getCommandInputThread().respondToSpecialCopyMessage(input);
 				}
 
 				//send message destination, simply print out

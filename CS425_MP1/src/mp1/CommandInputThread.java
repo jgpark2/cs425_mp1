@@ -429,7 +429,7 @@ public class CommandInputThread extends Thread {
 	 * method appends the relevant information to the message
 	 * and sends the message to the CentralServer
 	 * This method assumes that parseForIncorrectFormat has already been called
-	 * final format: get key model <requestingnodeid> <requestnumber> <reqorack>
+	 * final format: get key model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseGet(MessageType msg) {
 		//Extract model out of msg
@@ -1047,6 +1047,15 @@ public class CommandInputThread extends Thread {
 		String reqNodeId = input.substring(i+3, i+4);
 		int reqNodeIdx = node.getIndexFromId(reqNodeId);
 		
+		//Extract requestnumber
+		builder = new StringBuilder();
+		i += 5; //move to beginning of requestnumber
+		while (input.charAt(i) != ' ') { //move thru reqnum
+			builder.append(input.charAt(i));
+			i++;
+		}
+		int reqnum = Integer.parseInt(builder.toString());
+		
 		//Determine if input is req or ack messages
 		int reqat = input.lastIndexOf("req");
 		int ackat = input.lastIndexOf("ack");
@@ -1077,7 +1086,11 @@ public class CommandInputThread extends Thread {
 					//"Key <key> changed from <old value> to <value>"
 					Datum toupdate = new Datum(value, writets);
 					Datum old = node.sharedData.put(key, toupdate);
-					System.out.println("Key "+key+" changed from "+old.value+" to "+value);					
+					if (old == null) //this shouldn't happen if consistency models aren't mixed
+						System.out.println("Key "+key+" changed from null to "+value);
+					
+					else
+						System.out.println("Key "+key+" changed from "+old.value+" to "+value);
 					
 					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
 					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
@@ -1120,7 +1133,7 @@ public class CommandInputThread extends Thread {
 					
 					if (oldvalue == null) {
 						//respond to requestingnode on peer channel with an ack of the form
-						//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+						//update key value model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
 						String ack = identifier+" ack null "+input.substring(reqorackat + 4);
 						long ts = System.currentTimeMillis();
 						addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
@@ -1143,8 +1156,6 @@ public class CommandInputThread extends Thread {
 				
 				else { //ack
 					
-					// TODO Implement
-					
 					//look in recvacks to see how many acks we have received with identifier
 					if (acks == null || acks.toreceive < 1) {
 						//do nothing
@@ -1153,15 +1164,37 @@ public class CommandInputThread extends Thread {
 						
 						if (input.lastIndexOf("null") == -1) { //this ack does not say null
 							//store 0 in recvacks and print "Key <key> updated to <value>"
+							acks.toreceive = 0;
+							node.recvacks.put(identifier, acks);
+							System.out.println("Key "+key+" updated to "+value);
+							
 							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+							String writeglobal = "writeglobal "+key+" "+value+" "+writets;
+							addMessageToLeaderQueue(new MessageType(writeglobal, new Long(0)));
+							
 							//mark cmdComplete as true
+							cmdComplete = true;
 						}
 						else { //this ack says null
+
 							//store 1 more null ack received in recvacks' nullacks ArrayList
-							//if 3 such null acks have been received,
+							acks.nullacks.add(input);
+							node.recvacks.put(identifier, acks);
+							
+							if (acks.nullacks.size() >= 3) { //3 such null acks have been received
+								
 								//print "Key <key> does not exist in system, attempted update failed"
+								System.out.print("Key "+key+" does not exist in system,");
+								System.out.println(" attempted update failed");
+								
 								//store 0 in recvacks
+								acks.toreceive = 0;
+								node.recvacks.put(identifier, acks);
+								
 								//mark cmdComplete as true
+								cmdComplete = true;
+							}
+
 						}
 						
 					}
@@ -1173,58 +1206,220 @@ public class CommandInputThread extends Thread {
 			case 4: { //eventual consistecy W=2:
 				
 				if (reqat != -1) { //req
+
+					Datum oldvalue = node.sharedData.get(key);
 					
-					//req: if this Node's sharedData has a copy of the key, update it to value
-					//print "Key <key> changed from <oldvalue> to <value>"
-					//respond to requestingnode on peer channel with an ack of the form
-					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-				//req: if this Node's sharedData does not have a copy of the key,
-					//respond to requestingnode on peer channel with an ack of the form
-					//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+					if (oldvalue != null) { //this Node's sharedData has a copy of the key
+						
+						//update the copy of key in sharedData to value
+						node.sharedData.put(key, new Datum(value,writets));
+						
+						//print "Key <key> changed from <oldvalue> to <value>"
+						System.out.println("Key "+key+" changed from "+oldvalue.value+" to "+value);
+						
+						//respond to requestingnode on peer channel with an ack of the form
+						//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+						String ack = identifier+" ack "+input.substring(reqorackat + 4);
+						long ts = System.currentTimeMillis();
+						addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
+						
+					}
+					
+					else { //this Node's sharedData does not have a copy of the key
+						
+						//respond to requestingnode on peer channel with an ack of the form
+						//update key value model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+						String ack = identifier+" ack null "+input.substring(reqorackat + 4);
+						long ts = System.currentTimeMillis();
+						addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
+					}
 					
 				}
 				
 				else { //ack
 					
-					//ack: look in recvacks to see how many acks we have received with identifier:
-					//update key model <requestingnodeid> <requestnumber>
-					//if recvacks has 2 more acks to receive, and this ack does not say null after ack
-						//store 1 in recvacks
-					//if recvacks has 2 more acks to receive, and this ack says null after ack
-						//store 1 more null ack received in recvacks' nullacks ArrayList
-						//if 3 such null acks have been received, print
-							//"Key <key> does not exist in system, attempted update failed"
-							//store 0 in recvacks
-							//then mark cmdComplete as true
-					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
-						//store 0 in recvacks, print "Key <key> updated to <value>"
-						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-						//mark cmdComplete as true
-					//if recvacks has 1 more ack to receive, and this ack says null after ack
-						//store 1 more null ack received in recvacks' nullacks ArrayList
-						//if 3 such null acks have now been received, send out a special message to 1 Node
-							//telling them to insert this key/value/timestamp
-							//wait until you have received the ack for this, then print
-							//"Key <key> updated to <value>"
-							//store 0 in recvacks
-							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-							//mark cmdComplete as true
-						//if 2 such null acks have now been received and sharedData does not have this key,
-							//insert this key/value/<timestamp> into sharedData
-							//print "Key <key> changed from null to <value>"
-							//print "Key <key> updated to <value>"
-							//store 0 in recvacks
-							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-							//mark cmdComplete as true
-					//if recvacks has 0 more acks to receive, do nothing
+					//look in recvacks to see how many acks we have received with identifier
+					if (acks == null || acks.toreceive < 1) {
+						//do nothing
+					}
 					
+					else if (acks.toreceive == 1) {
+
+						if (input.lastIndexOf("null") == -1) { //this ack does not say null
+							//store 0 in recvacks, print "Key <key> updated to <value>"
+							acks.toreceive = 0;
+							node.recvacks.put(identifier, acks);
+							System.out.println("Key "+key+" updated to "+value);
+							
+							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+							String writeglobal = "writeglobal "+key+" "+value+" "+writets;
+							addMessageToLeaderQueue(new MessageType(writeglobal, new Long(0)));
+							
+							//mark cmdComplete as true
+							cmdComplete = true;
+						}
+						
+						else { //this ack says null
+							//store 1 more null ack received in recvacks' nullacks ArrayList
+							acks.nullacks.add(input);
+							node.recvacks.put(identifier, acks);
+							
+							if (acks.nullacks.size() >= 3) { //3 such null acks have now been received
+								//store 0 in recvacks (cmdComplete won't be marked)
+								acks.toreceive = 0;
+								node.recvacks.put(identifier, acks);
+								
+								//send out a special message to 1 Node: "copy key value reqNodeId reqnum req timestamp"
+								//telling them to insert this key/value/timestamp
+								String special = "copy "+key+" "+value+" "+reqNodeId+" "+reqnum+" req "+writets;
+								long ts = System.currentTimeMillis();
+								addMessageToNodeQueue(new MessageType(special+" "+ts, ts), (reqNodeIdx+1)%4);
+								
+								//wait until you have received the ack for this (see respondToSpecialCopyMessage)
+								//then cmdComplete will be marked, and this will no longer matter
+							}
+							
+							//if 2 such null acks have now been received and sharedData does not have this key
+							else if (acks.nullacks.size() == 2 && node.sharedData.get(key) == null) {
+								//insert this key/value/<timestamp> into sharedData and print special message
+								node.sharedData.put(key, new Datum(value,writets));
+								System.out.println("Specially inserted "+key+" for eventual consistency update");
+								
+								//print "Key <key> changed from null to <value>"
+								//print "Key <key> updated to <value>"
+								System.out.println("Key "+key+" changed from null to "+value);
+								System.out.println("Key "+key+" updated to "+value);
+								
+								//store 0 in recvacks
+								acks.toreceive = 0;
+								node.recvacks.put(identifier, acks);
+								
+								//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+								String writeglobal = "writeglobal "+key+" "+value+" "+writets;
+								addMessageToLeaderQueue(new MessageType(writeglobal, new Long(0)));
+								
+								//mark cmdComplete as true
+								cmdComplete = true;
+							}
+							
+						}
+						
+					}
+					
+					else { //recvacks has 2 more acks to receive
+						
+						if (input.lastIndexOf("null") == -1) { //this ack does not say null
+							//store 1 in recvacks
+							acks.toreceive = 1;
+							node.recvacks.put(identifier, acks);
+						}
+						else { //this ack says null
+							//store 1 more null ack received in recvacks' nullacks ArrayList
+							acks.nullacks.add(input);
+							node.recvacks.put(identifier, acks);
+							
+							if (acks.nullacks.size() >= 3) { //3 such null acks have been received
+								//print attempted update failed message
+								System.out.print("Key "+key+" does not exist in system,");
+								System.out.println(" attempted update failed");
+								
+								//store 0 in recvacks
+								acks.toreceive = 0;
+								node.recvacks.put(identifier, acks);
+								
+								//then mark cmdComplete as true
+								cmdComplete = true;
+							}
+							
+						}
+
+					}
+
 				}
 
 				break;
 			}
 		}
+
+	}
+	
+	
+	/*
+	 * This method is for taking care of the case where eventual consistency
+	 * required that we make a second copy in the system at a different Node
+	 * Message form: "copy key value reqNodeId reqnum req timestamp"
+	 * Updates this.cmdcomplete
+	 */
+	public void respondToSpecialCopyMessage(String input) {
+
+		int len = input.length();
+		StringBuilder builder;
+		int i = 5;
 		
-		System.out.println("Received update message: "+input);
+		//Extract key
+		builder = new StringBuilder();
+		while (input.charAt(i) != ' ') { //move thru key
+			builder.append(input.charAt(i));
+			i++;
+		}
+		String key = builder.toString();
+		
+		//Extract value
+		builder = new StringBuilder();
+		i++; //move past space between key and value
+		while (input.charAt(i) != ' ') { //move thru value
+			builder.append(input.charAt(i));
+			i++;
+		}
+		String value = builder.toString();
+		
+		//Extract requestingnodeid
+		i++; //move past space between value and reqNodeId
+		String reqNodeId = input.substring(i, i+1);
+		int reqNodeIdx = node.getIndexFromId(reqNodeId);
+		
+		//Determine if input is req or ack messages
+		int reqat = input.lastIndexOf("req");
+		int ackat = input.lastIndexOf("ack");
+		int reqorackat = Math.max(reqat, ackat);
+		
+		//Extract timestamp of update operation invocation
+		builder = new StringBuilder();
+		i  = reqorackat + 4; //move to the timestamp immediately after req/ack
+		while (i < len && input.charAt(i) != ' ') { //move thru timestamp
+			builder.append(input.charAt(i));
+			i++;
+		}
+		long writets = Long.parseLong(builder.toString());
+		
+		
+		if (reqat != -1) { //req
+			//insert this into sharedData, then print
+			//"Specially inserted <key> for eventual consistency update"
+			node.sharedData.put(key, new Datum(value,writets));
+			System.out.println("Specially inserted "+key+" for eventual consistency update");
+			
+			//return an ack of same form, but with ack instead of req
+			String ack = new String(input.substring(0, reqat) +"ack "); //copy key value reqNodeId reqnum ack
+			ack = ack + input.substring(reqat + 4); //timestamp
+			long ts = System.currentTimeMillis();
+			addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
+		}
+		
+		else { //ack
+			//print "Second copy created in system"
+			//print "Key <key> updated to <value>"
+			System.out.println("Second copy created in system");
+			System.out.println("Key "+key+" updated to "+value);
+			
+			//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+			String writeglobal = "writeglobal "+key+" "+value+" "+writets;
+			addMessageToLeaderQueue(new MessageType(writeglobal, new Long(0)));
+		
+			//mark cmdComplete as true
+			cmdComplete = true;
+		}
+
 	}
 	
 	

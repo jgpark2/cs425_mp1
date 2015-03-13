@@ -57,7 +57,7 @@ public class MessageSenderThread extends Thread {
 			String msg = "";
 			try {
 				msg = mqout.take();
-				//while MessageReceiverThread keeps reading from its input stream...
+				//while MessageRelayThread keeps reading from its input stream...
 	        	outs.println(msg);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
