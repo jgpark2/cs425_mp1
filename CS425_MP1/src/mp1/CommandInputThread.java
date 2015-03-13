@@ -1015,79 +1015,215 @@ public class CommandInputThread extends Thread {
 	 * When a MessageReceiverThread receives an update message,
 	 * this method either sends a reply, completes an update operation, or does nothing
 	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 * Received format: update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	public void respondToUpdateMessage(String input) {
-		// TODO Implement
-		//UPDATE
-		//linearizability:
-			//req: update the key and value and attached timestamp in sharedData, print
-				//"Key <key> changed from <old value> to <value>"
-				//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
-				//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-			//ack: look in recvacks to see how many acks we have received with identifier:
-				//update key value model <requestingnodeid> <requestnumber>
-				//if recvacks has more than 1 more acks to receive, store that number decremented
-				//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Key <key> updated to <value>"
-					//mark cmdComplete as true
-	
-		//sequential consistency: same as linearizability
-	
-		//eventual consistency W=1:
-			//req: if this Node's sharedData has a copy of the key, update it to value
-				//print "Key <key> changed from <oldvalue> to <value>"
-				//respond to requestingnode on peer channel with an ack of the form
-				//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-			//req: if this Node's sharedData does not have a copy of the key,
-				//respond to requestingnode on peer channel with an ack of the form
-				//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
-			//ack: look in recvacks to see how many acks we have received with identifier:
-				//update key model <requestingnodeid> <requestnumber>
-				//if recvacks has 1 more ack to receive, and this ack does not say null after ack
-					//store 0 in recvacks and print "Key <key> updated to <value>"
-					//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-					//mark cmdComplete as true
-				//if recvacks has 1 more ack to receive, and this ack says null after ack
-					//store 1 more null ack received in recvacks' nullacks ArrayList
-					//if 3 such null acks have been received,
-						//print "Key <key> does not exist in system, attempted update failed"
-						//store 0 in recvacks
-						//mark cmdComplete as true
-				//if recvacks has 0 more acks to receive, do nothing
-	
-		//eventual consistecy W=2:
-			//req: same as eventual consistency W=1
+		
+		int len = input.length();
+		StringBuilder builder;
+		int i = 7;
+		
+		//Extract key
+		builder = new StringBuilder();
+		while (input.charAt(i) != ' ') { //move thru key
+			builder.append(input.charAt(i));
+			i++;
+		}
+		String key = builder.toString();
+		
+		//Extract value
+		builder = new StringBuilder();
+		i++; //move past space between key and value
+		while (input.charAt(i) != ' ') { //move thru value
+			builder.append(input.charAt(i));
+			i++;
+		}
+		String value = builder.toString();
+		
+		//Extract model
+		int model = Integer.parseInt(input.substring(i+1, i+2));
+		
+		//Extract requestingnodeid
+		String reqNodeId = input.substring(i+3, i+4);
+		int reqNodeIdx = node.getIndexFromId(reqNodeId);
+		
+		//Determine if input is req or ack messages
+		int reqat = input.lastIndexOf("req");
+		int ackat = input.lastIndexOf("ack");
+		int reqorackat = Math.max(reqat, ackat);
+		
+		//Extract timestamp of update operation invocation
+		builder = new StringBuilder();
+		i  = reqorackat + 4; //move to the timestamp immediately after req/ack
+		while (i < len && input.charAt(i) != ' ') { //move thru timestamp
+			builder.append(input.charAt(i));
+			i++;
+		}
+		long writets = Long.parseLong(builder.toString());
+		
+		//This format of the message represents a unique identifier for the request
+		String identifier = input.substring(0, reqorackat-1);
+		
+		AckTracker acks = node.recvacks.get(identifier);
 
-			//ack: look in recvacks to see how many acks we have received with identifier:
-				//update key model <requestingnodeid> <requestnumber>
-				//if recvacks has 2 more acks to receive, and this ack does not say null after ack
-					//store 1 in recvacks
-				//if recvacks has 2 more acks to receive, and this ack says null after ack
-					//store 1 more null ack received in recvacks' nullacks ArrayList
-					//if 3 such null acks have been received, print
-						//"Key <key> does not exist in system, attempted update failed"
-						//store 0 in recvacks
-						//then mark cmdComplete as true
-				//if recvacks has 1 more ack to receive, and this ack does not say null after ack
-					//store 0 in recvacks, print "Key <key> updated to <value>"
-					//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-					//mark cmdComplete as true
-				//if recvacks has 1 more ack to receive, and this ack says null after ack
-					//store 1 more null ack received in recvacks' nullacks ArrayList
-					//if 3 such null acks have now been received, send out a special message to 1 Node
-						//telling them to insert this key/value/timestamp
-						//wait until you have received the ack for this, then print
-						//"Key <key> updated to <value>"
-						//store 0 in recvacks
-						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-						//mark cmdComplete as true
-					//if 2 such null acks have now been received and sharedData does not have this key,
-						//insert this key/value/<timestamp> into sharedData
-						//print "Key <key> changed from null to <value>"
+		
+		switch (model) {
+			case 1: //linearizability and sequential consistency behave exactly the same
+			case 2: {
+				
+				if (reqat != -1) { //req
+					
+					//update the key and value and attached timestamp in sharedData, print
+					//"Key <key> changed from <old value> to <value>"
+					Datum toupdate = new Datum(value, writets);
+					Datum old = node.sharedData.put(key, toupdate);
+					System.out.println("Key "+key+" changed from "+old.value+" to "+value);					
+					
+					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
+					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+					String ack = new String(input.substring(0, reqat) +"ack "); //update key value model <reqNodeId> <reqnum> ack
+					ack = ack + input.substring(reqat + 4); //<timestamp>
+					addMessageToLeaderQueue(new MessageType(ack, System.currentTimeMillis())); //adds senttimestamp
+				}
+				
+				else { //ack
+					
+					//look in recvacks to see how many acks we have received with identifier
+					if (acks == null || acks.toreceive < 1) {
+						//do nothing
+					}
+					else if (acks.toreceive == 1) {
+						//if recvacks has 1 more ack to receive, store 0 in recvacks
+						acks.toreceive = 0;
+						node.recvacks.put(identifier, acks);
+						
 						//print "Key <key> updated to <value>"
-						//store 0 in recvacks
+						System.out.println("Key "+key+" updated to "+value);
+						
+						//mark cmdComplete as true
+						cmdComplete = true;
+					}
+					else {
+						//if recvacks has more than 1 more acks to receive, store that number decremented
+						acks.toreceive--;
+						node.recvacks.put(identifier, acks);
+					}
+				}
+				
+				break;
+			}
+			case 3: { //eventual consistency W=1:
+				
+				if (reqat != -1) { //req
+					
+					Datum oldvalue = node.sharedData.get(key);
+					
+					if (oldvalue == null) {
+						//respond to requestingnode on peer channel with an ack of the form
+						//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+						String ack = identifier+" ack null "+input.substring(reqorackat + 4);
+						long ts = System.currentTimeMillis();
+						addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
+					}
+					
+					else {
+						//update the copy of key in sharedData to value
+						node.sharedData.put(key, new Datum(value,writets));
+						
+						//print "Key <key> changed from <oldvalue> to <value>"
+						System.out.println("Key "+key+" changed from "+oldvalue.value+" to "+value);
+						
+						//respond to requestingnode on peer channel with an ack of the form
+						//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+						String ack = identifier+" ack "+input.substring(reqorackat + 4);
+						long ts = System.currentTimeMillis();
+						addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
+					}					
+				}
+				
+				else { //ack
+					
+					// TODO Implement
+					
+					//look in recvacks to see how many acks we have received with identifier
+					if (acks == null || acks.toreceive < 1) {
+						//do nothing
+					}
+					else {
+						
+						if (input.lastIndexOf("null") == -1) { //this ack does not say null
+							//store 0 in recvacks and print "Key <key> updated to <value>"
+							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+							//mark cmdComplete as true
+						}
+						else { //this ack says null
+							//store 1 more null ack received in recvacks' nullacks ArrayList
+							//if 3 such null acks have been received,
+								//print "Key <key> does not exist in system, attempted update failed"
+								//store 0 in recvacks
+								//mark cmdComplete as true
+						}
+						
+					}
+					
+				}
+				
+				break;
+			}
+			case 4: { //eventual consistecy W=2:
+				
+				if (reqat != -1) { //req
+					
+					//req: if this Node's sharedData has a copy of the key, update it to value
+					//print "Key <key> changed from <oldvalue> to <value>"
+					//respond to requestingnode on peer channel with an ack of the form
+					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+				//req: if this Node's sharedData does not have a copy of the key,
+					//respond to requestingnode on peer channel with an ack of the form
+					//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+					
+				}
+				
+				else { //ack
+					
+					//ack: look in recvacks to see how many acks we have received with identifier:
+					//update key model <requestingnodeid> <requestnumber>
+					//if recvacks has 2 more acks to receive, and this ack does not say null after ack
+						//store 1 in recvacks
+					//if recvacks has 2 more acks to receive, and this ack says null after ack
+						//store 1 more null ack received in recvacks' nullacks ArrayList
+						//if 3 such null acks have been received, print
+							//"Key <key> does not exist in system, attempted update failed"
+							//store 0 in recvacks
+							//then mark cmdComplete as true
+					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
+						//store 0 in recvacks, print "Key <key> updated to <value>"
 						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
 						//mark cmdComplete as true
-				//if recvacks has 0 more acks to receive, do nothing
+					//if recvacks has 1 more ack to receive, and this ack says null after ack
+						//store 1 more null ack received in recvacks' nullacks ArrayList
+						//if 3 such null acks have now been received, send out a special message to 1 Node
+							//telling them to insert this key/value/timestamp
+							//wait until you have received the ack for this, then print
+							//"Key <key> updated to <value>"
+							//store 0 in recvacks
+							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+							//mark cmdComplete as true
+						//if 2 such null acks have now been received and sharedData does not have this key,
+							//insert this key/value/<timestamp> into sharedData
+							//print "Key <key> changed from null to <value>"
+							//print "Key <key> updated to <value>"
+							//store 0 in recvacks
+							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+							//mark cmdComplete as true
+					//if recvacks has 0 more acks to receive, do nothing
+					
+				}
+
+				break;
+			}
+		}
+		
 		System.out.println("Received update message: "+input);
 	}
 	
