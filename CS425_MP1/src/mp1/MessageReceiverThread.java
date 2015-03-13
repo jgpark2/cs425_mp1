@@ -47,10 +47,9 @@ public class MessageReceiverThread extends Thread {
 			//while CentralServer keeps writing to its output stream...
 			while ((input = ins.readLine()) != null) {
 				
-				//TODO: respond to these separately
 				//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 				if (input.lastIndexOf("get ") == 0) {
-					node.getCommandInputThread().respondToMessage(input);
+					node.getCommandInputThread().respondToGetMessage(input);
 				}
 				
 				//delete key <timestamp>
@@ -69,22 +68,22 @@ public class MessageReceiverThread extends Thread {
 				
 				//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 				else if (input.lastIndexOf("insert ") == 0) {
-					node.getCommandInputThread().respondToMessage(input);
+					node.getCommandInputThread().respondToInsertMessage(input);
 				}
 				
 				//update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 				else if (input.lastIndexOf("update ") == 0) {
-					node.getCommandInputThread().respondToMessage(input);
+					node.getCommandInputThread().respondToUpdateMessage(input);
 				}
 				
 				//search key <requestingnodeid> <requestnumber> <NodeId> <reqorack> <timestamp>
 				else if (input.lastIndexOf("search ") == 0) {
-					node.getCommandInputThread().respondToMessage(input);
+					node.getCommandInputThread().respondToSearchMessage(input);
 				}
 				
 				//repair <key> <value> <associatedtimestamp> ...
 				else if (input.lastIndexOf("repair") == 0) {
-					node.getCommandInputThread().respondToMessage(input);
+					node.getCommandInputThread().respondToRepairMessage(input);
 				}
 
 				//send message destination, simply print out

@@ -442,10 +442,7 @@ public class CommandInputThread extends Thread {
 			case 1: {
 				//linearizability: send to CentralServer, wait for req to be received
 				
-				//This format of the message represents a unique identifier for the request
-				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 1);
-				msg.msg = msg.msg + " " + "req";
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt + " " + "req";
 				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				break;
 			}
@@ -476,11 +473,11 @@ public class CommandInputThread extends Thread {
 					
 					//This format of the message represents a unique identifier for the request
 					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-					node.recvacks.put(msg.msg, 1);
+					node.recvacks.put(msg.msg, new AckTracker(1));
 					msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
 					for (int i = 0; i< 4; i++) {
 						if (i != myIdx)
-							addMessageToNodeQueue(msg, i);
+							addMessageToNodeQueue(msg, i); //this method adds no timestamp
 					}
 				}
 				
@@ -489,6 +486,9 @@ public class CommandInputThread extends Thread {
 					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
 					Date curdate = new Date(value.timestamp);
 					System.out.println(format.format(curdate) + ")");
+					//print every <value, timestamp> pair examined during get request
+					System.out.println("("+value.value+", "+format.format(curdate) + ")");
+
 					this.cmdComplete = true;
 				}
 				
@@ -498,11 +498,27 @@ public class CommandInputThread extends Thread {
 			case 4: {
 				//eventual consistency, R=2; wait until 2 Nodes have been read
 				
-				//Since our replica may not contain key, we have to read all other Nodes too
+				//Extract key out of msg
+				String key = msg.msg.substring(4, msg.msg.length()-2);
+				Datum value = node.sharedData.get(key);
 				
 				//This format of the message represents a unique identifier for the request
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 2);
+				
+				if (value == null) { //wait for two acks
+					node.recvacks.put(msg.msg, new AckTracker(2));
+				}
+				else { //our replica contains key, store its value in recvacks, wait for 1 ack
+					AckTracker ours = new AckTracker(1); //wait for 1 ack
+					//add our key/value as an ack message of form
+					//get key model <reqNodeId> <reqcnt> <value> <associatedvaluetimestamp> ack <timestamp>
+					String ourack = new String(msg.msg); //get key model <reqNodeId> <reqcnt>
+					ourack = ourack + " " + value.value + " " + value.timestamp + " ack "+msg.ts.longValue();
+					ours.validacks.add(ourack);
+					
+					node.recvacks.put(msg.msg, ours);
+				}
+				
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
 				for (int i = 0; i< 4; i++) {
 					if (i != myIdx)
@@ -559,7 +575,7 @@ public class CommandInputThread extends Thread {
 				//linearizability: send to CentralServer, wait for 4 acks to be received
 				//This format of the message represents a unique identifier for the request
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 4);
+				node.recvacks.put(msg.msg, new AckTracker(4));
 				msg.msg = msg.msg + " " + "req";
 				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				break;
@@ -569,19 +585,30 @@ public class CommandInputThread extends Thread {
 				//sequential consistency: send to CentralServer, wait for 4 acks to be received
 				//This format of the message represents a unique identifier for the request
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 4);
+				node.recvacks.put(msg.msg, new AckTracker(4));
 				msg.msg = msg.msg + " " + "req";
 				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				break;
 			}
 			
 			case 3: {
-				//eventual consistency, W=1: send to 1 replica (ours) (Piazza post @178)
+				//eventual consistency, W=1: only wait for 1 replica to write (ours)
 				
 				Datum toinsert = new Datum(value, msg.ts.longValue());
 				node.sharedData.put(key, toinsert);
 				System.out.println("Inserted key "+key);
 				
+				//We need to tell them all to write, but we don't need to wait for the acks
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				node.recvacks.put(msg.msg, new AckTracker(0));
+				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+				for (int idx=0; idx<4; idx++) {
+					if (idx != myIdx)
+						addMessageToNodeQueue(msg, idx); //this method adds no timestamp
+				}
+				
+				System.out.println("Inserted key "+key);
 				this.cmdComplete = true;
 				break;
 			}
@@ -589,11 +616,20 @@ public class CommandInputThread extends Thread {
 			case 4: {
 				//eventual consistency, W=2: send to 1 other Node, wait for 1 ack
 				
+				Datum toinsert = new Datum(value, msg.ts.longValue());
+				node.sharedData.put(key, toinsert);
+				System.out.println("Inserted key "+key);
+				
+				//We need to tell them all to write, but we only need 1 ack
 				//This format of the message represents a unique identifier for the request
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, 1);
+				node.recvacks.put(msg.msg, new AckTracker(1));
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
-				addMessageToNodeQueue(msg, (myIdx + 1)%4);
+				for (int idx=0; idx<4; idx++) {
+					if (idx != myIdx)
+						addMessageToNodeQueue(msg, idx); //this method adds no timestamp
+				}
+				
 				break;
 			}
 			
@@ -660,48 +696,57 @@ public class CommandInputThread extends Thread {
 			case 3: {
 				//eventual consistency, W=1: send to 1 replica (ours) (Piazza post @178)
 				
-				if (node.sharedData.get(key) == null) { //try to update in other Nodes
-					//This format of the message represents a unique identifier for the request
-					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-					node.recvacks.put(msg.msg, 1);
-					msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
-					for (int idx=0; idx<4; idx++)
-						addMessageToNodeQueue(msg, idx);
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				
+				if (node.sharedData.get(key) == null) { //not yet updated in any replicas, wait for 1 ack
 
-					return;
+					node.recvacks.put(msg.msg, new AckTracker(1));
+					
 				}
-						
-				Datum toinsert = new Datum(value, msg.ts.longValue());
-				Datum old = node.sharedData.put(key, toinsert);
-				System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+				else { //already written in 1 replica, wait for no acks
+					Datum toinsert = new Datum(value, msg.ts.longValue());
+					Datum old = node.sharedData.put(key, toinsert);
+					System.out.println("Key "+key+" changed from "+old.value+" to "+value);
+					
+					node.recvacks.put(msg.msg, new AckTracker(0));
+					
+					MessageType writeglobal = new MessageType("", msg.ts);
+					writeglobal.msg = "writeglobal "+key+" "+value;
+					addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
+					
+					this.cmdComplete = true;
+				}
 				
-				MessageType writeglobal = new MessageType("", msg.ts);
-				writeglobal.msg = "writeglobal "+key+" "+value;
-				addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
-				
-				this.cmdComplete = true;
+				//We need to tell them all to write, regardless of how many acks we need
+				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
+				for (int idx=0; idx<4; idx++) {
+					if (idx != myIdx)
+						addMessageToNodeQueue(msg, idx); //this method adds no timestamp
+				}
+
 				return;
 			}
 					
 			case 4: {
 				//eventual consistency, W=2: update in 2 Nodes
 				
+				//This format of the message represents a unique identifier for the request
+				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				
 				if (node.sharedData.get(key) == null) { //try to update in other Nodes
-					//This format of the message represents a unique identifier for the request
-					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-					node.recvacks.put(msg.msg, 2);
+					node.recvacks.put(msg.msg, new AckTracker(2));
 				}
 				else { //update in our Node and one other Node
 							
 					Datum toinsert = new Datum(value, msg.ts.longValue());
 					Datum old = node.sharedData.put(key, toinsert);
 					System.out.println("Key "+key+" changed from "+old.value+" to "+value);
-					
-					//This format of the message represents a unique identifier for the request
-					msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-					node.recvacks.put(msg.msg, 1);
+
+					node.recvacks.put(msg.msg, new AckTracker(1));
 				}
 				
+				//We need to tell them all to write, regardless of how many acks we need
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
 				for (int idx=0; idx<4; idx++) {
 					if (idx != myIdx)
@@ -725,9 +770,10 @@ public class CommandInputThread extends Thread {
 		
 		//This format of the message represents a unique identifier for the request
 		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-		node.recvacks.put(msg.msg, 4);
+		node.recvacks.put(msg.msg, new AckTracker(4));
 		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
+		
 		MessageType writeglobal = new MessageType("", msg.ts);
 		writeglobal.msg = "writeglobal "+key+" "+value;
 		addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
@@ -856,217 +902,231 @@ public class CommandInputThread extends Thread {
 		
 		//This format of the message represents a unique identifier for the request
 		msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-		node.recvacks.put(msg.msg, 3);
+		node.recvacks.put(msg.msg, new AckTracker(3));
 		msg.msg = msg.msg + " " + "req";
 		
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 	
-
+	
 	/*
-	 * When a MessageReceiverThread receives a get/insert/update message,
-	 * this method either sends a reply, updates a key/value, or does nothing
+	 * When a MessageReceiverThread receives a get message,
+	 * this method either sends a reply, completes a get operation, or does nothing
 	 * Updates this.cmdComplete when the necessary number of acks have been received
-	 * Delete messages are taken care of in MessageReceiverThread
 	 */
-	public void respondToMessage(String input) {
-		// TODO Do things with the key/value Dictionary
-		
-		//It's easier to parse out the type of message first (get, update, etc.)
-		//  than it is to parse out the consistency model first (see parseForIncorrectFormat)
-		
-		//All consistency models EXCEPT eventual consistency:
-			//if the key does not exist and you attempt an update, report an error (Piazza @236)
-		
+	public void respondToGetMessage(String input) {
+		// TODO Implement
 		//GET
-			//linearizability: (the request only gets sent back to the requestingNode)
-				//req: print out "get(<key>) = <value>" from sharedData
-					//mark cmdComplete as true
-				//ack: not applicable, see linearizable totally-ordered broadcast algorithm
-		
-			//sequential consistency: not applicable, requesting node just prints out its own value
-		
-			//eventual consistency R=1:
-				//req: send requestingnode (along peer connection) an ack of form
-					//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
-					//if this node doesn't have the key, put "null" as <value> and <associatedvaluetimestamp>
-				//ack: look in recvacks to see how many acks we have received with identifier:
-					//get key model <requestingnodeid> <requestnumber>
-					//if recvacks has 1 more ack to receive (R=1) and ack doesn't have "null" as value,
-						//store 0 in recvacks and print
-						//"get(<key>) = (<value>, <associatedvaluetimestamp>)"
-						//mark cmdComplete as true
-					//if recvacks has 1 more ack to receive (R=1) and ack has "null" as value,
-						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
-							//store 0 in recvacks
-							//mark cmdComplete as true
-					//if recvacks has 0 more acks to receive, do nothing
-		
-			//eventual consistency R=2:
-				//req: same as req for eventual consistency R=1
-				//ack: look in recvacks to see how many acks we have received with identifier:
-					//get key model <requestingnodeid> <requestnumber>
-					//if recvacks has 2 more acks to receive (R=2) and this ack doesn't have "null" as value,
-						//store 1 in recvacks and
-						//store the received (value,associatedtimestamp) SOMEWHERE (in recvacks?)
-					//if recvacks has 2 more acks to receive (R=2) and this ack has "null" as value,
-						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
-							//store 0 in recvacks
-							//mark cmdComplete as true
-					//if recvacks has 1 more ack to receive and this ack doesn't have "null" as value,
-						//store 0 in recvacks and compare
-						//the previously received ack (stored SOMEWHERE) and the current received one
-						//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the more recent one
-						//print "<value>, <timestamp>" for the less recent one
-						//mark cmdComplete as true
-					//if recvacks has 1 more ack to receive and this ack has "null" as value,
-						//if 1 such null ack has already been received:
-							//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the non-null ack SOMEWHERE
-							//store 0 in recvacks
-							//mark cmdComplete as true
-						//if no such null acks have been received yet:
-							//store 1 more null ack received SOMEWHERE
-		
-		
-		//DELETE: not applicable, these are handled in MessageReceiverThread directly, line 59
-		
-		//SEND: not applicable, these are handled in MessageReceiverThread and need no response
-		
-		//INSERT
-			//linearizability:
-				//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
-					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
-					//insert key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-				//ack: look in recvacks to see how many acks we have received with identifier:
-					//insert key value model <requestingnodeid> <requestnumber>
-					//if recvacks has more than 1 more acks to receive, store that number decremented
-					//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Inserted key <key>"
-						//mark cmdComplete as true
-		
-			//sequential consistency: same as linearizability
-		
-			//eventual consistency W=1: not applicable, taken care of in parseInsert
-		
-			//eventual consistency W=2:
-				//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
-					//send an ack to requesting node of form (don't have to append any timestamp)
-					//insert key value model <requestingnodeid> <requestnumber> ack <timestamp>
-				//ack: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
-					//mark cmdComplete as true
-		
-		
-		//UPDATE
-			//linearizability:
-				//req: update the key and value and attached timestamp in sharedData, print
-					//"Key <key> changed from <old value> to <value>"
-					//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
-					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-				//ack: look in recvacks to see how many acks we have received with identifier:
-					//update key value model <requestingnodeid> <requestnumber>
-					//if recvacks has more than 1 more acks to receive, store that number decremented
-					//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Key <key> updated to <value>"
-						//mark cmdComplete as true
-		
-			//sequential consistency: same as linearizability
-		
-			//eventual consistency W=1:
-				//req: if this Node's sharedData has a copy of the key, update it to value
-					//print "Key <key> changed from <oldvalue> to <value>"
-					//respond to requestingnode on peer channel with an ack of the form
-					//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-				//req: if this Node's sharedData does not have a copy of the key,
-					//respond to requestingnode on peer channel with an ack of the form
-					//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
-				//ack: look in recvacks to see how many acks we have received with identifier:
-					//update key model <requestingnodeid> <requestnumber>
-					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
-						//store 0 in recvacks and print "Key <key> updated to <value>"
-						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-						//mark cmdComplete as true
-					//if recvacks has 1 more ack to receive, and this ack says null after ack
-						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have been received,
-							//print "Key <key> does not exist in system, attempted update failed"
-							//store 0 in recvacks
-							//mark cmdComplete as true
-					//if recvacks has 0 more acks to receive, do nothing
-		
-			//eventual consistecy W=2:
-				//req: same as eventual consistency W=1
-
-				//ack: look in recvacks to see how many acks we have received with identifier:
-					//update key model <requestingnodeid> <requestnumber>
-					//if recvacks has 2 more acks to receive, and this ack does not say null after ack
-						//store 1 in recvacks
-					//if recvacks has 2 more acks to receive, and this ack says null after ack
-						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have been received, print
-							//"Key <key> does not exist in system, attempted update failed"
-							//store 0 in recvacks
-							//then mark cmdComplete as true
-					//if recvacks has 1 more ack to receive, and this ack does not say null after ack
-						//store 0 in recvacks, print "Key <key> updated to <value>"
-						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-						//mark cmdComplete as true
-					//if recvacks has 1 more ack to receive, and this ack says null after ack
-						//store 1 more null ack received SOMEWHERE
-						//if 3 such null acks have now been received, send out a special message to 1 Node
-							//telling them to insert this key/value/timestamp
-							//wait until you have received the ack for this, then print
-							//"Key <key> updated to <value>"
-							//store 0 in recvacks
-							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-							//mark cmdComplete as true
-						//if 2 such null acks have now been received and sharedData does not have this key,
-							//insert this key/value/<timestamp> into sharedData
-							//print "Key <key> changed from null to <value>"
-							//print "Key <key> updated to <value>"
-							//store 0 in recvacks
-							//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
-							//mark cmdComplete as true
-					//if recvacks has 0 more acks to receive, do nothing
-		
-		
-		//SEARCH
-			//req: respond with an ack of the form
-				//search key <requestingnodeid> <requestnumber> <myNodeId> ack <timestamp>
-				//if this node doesn't have the key in sharedData, put "null" as <myNodeId> (else put this node's id)
+		//linearizability: (the request only gets sent back to the requestingNode)
+			//req: print out "get(<key>) = <value>" from sharedData
+				//mark cmdComplete as true
+			//ack: not applicable, see linearizable totally-ordered broadcast algorithm
+	
+		//sequential consistency: not applicable, requesting node just prints out its own value
+	
+		//eventual consistency R=1:
+			//req: send requestingnode (along peer connection) an ack of form
+				//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
+				//if this node doesn't have the key, put "null" as <value> and <associatedvaluetimestamp>
 			//ack: look in recvacks to see how many acks we have received with identifier:
-				//search key <requestingnodeid> <requestnumber>
-				//if recvacks has more than 1 more ack to receive, and this ack does not say "null"
-					//store that number decremented in recvacks, store <myNodeId> SOMEWHERE (recvacks?)
-				//if recvacks has more than 1 more ack to receive, and this ack says "null"
-					//store that number decremented in recvacks
-				//if recvacks has 1 ack to receive, store 0 in recvacks and
-					//print out "Key exists in these replicas: "
-					//this Node's id if it has key, then print out <myNodeId> for this ack if it's not "null"
-					//then print out all the nodeids stored SOMEWHERE
+				//get key model <requestingnodeid> <requestnumber>
+				//if recvacks has 1 more ack to receive (R=1) and ack doesn't have "null" as value,
+					//store 0 in recvacks and print
+					//"get(<key>) = (<value>, <associatedvaluetimestamp>)"
+					//then print "(<value>, <associatedvaluetimestamp>)" on a new line
 					//mark cmdComplete as true
+				//if recvacks has 1 more ack to receive (R=1) and ack has "null" as value,
+					//store 1 more null ack received in recvacks' nullacks ArrayList
+					//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
+						//store 0 in recvacks
+						//mark cmdComplete as true
+				//if recvacks has 0 more acks to receive, do nothing
 		
-		
-		//REPAIR: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
-			//for every key in the message
-				//if it's not in this Node's sharedData
-				//or its associated timestamp in sharedData is less recent than the one in the message
-					//update sharedData with the message's value and associated timestamp
-				//else this Node's sharedData has the more recent write info, so do nothing
+		//eventual consistency R=2:
+		//req: same as req for eventual consistency R=1
+		//ack: look in recvacks to see how many acks we have received with identifier:
+			//get key model <requestingnodeid> <requestnumber>
+			//if recvacks has 2 more acks to receive (R=2) and this ack doesn't have "null" as value,
+				//store 1 in recvacks and
+				//store the received (value,associatedtimestamp) in recvacks' validacks ArrayList
+			//if recvacks has 2 more acks to receive (R=2) and this ack has "null" as value,
+				//store 1 more null ack received recvacks' nullacks ArrayList
+				//if 3 such null acks have been received now, print "get(<key>) = (NO KEY FOUND)"
+					//store 0 in recvacks
+					//mark cmdComplete as true
+			//if recvacks has 1 more ack to receive and this ack doesn't have "null" as value,
+				//store 0 in recvacks and compare
+				//the previously received ack (stored in recvacks' validacks ArrayList) and the current received one
+				//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the more recent one
+				//print "(<value>, <timestamp>)" for the both
+				//mark cmdComplete as true
+			//if recvacks has 1 more ack to receive and this ack has "null" as value,
+				//if 1 such null ack has already been received:
+					//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the non-null ack in recvacks' validacks ArrayList
+					//store 0 in recvacks
+					//mark cmdComplete as true
+				//if no such null acks have been received yet:
+					//store 1 more null ack received in recvacks' nullacks ArrayList
+	}
+	
+	
+	/*
+	 * When a MessageReceiverThread receives an insert message,
+	 * this method either sends a reply, completes an insert operation, or does nothing
+	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 */
+	public void respondToInsertMessage(String input) {
+		// TODO Implement
+		//INSERT
+		//linearizability:
+			//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+				//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
+				//insert key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+			//ack: look in recvacks to see how many acks we have received with identifier:
+				//insert key value model <requestingnodeid> <requestnumber>
+				//if recvacks has more than 1 more acks to receive, store that number decremented
+				//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Inserted key <key>"
+					//mark cmdComplete as true
+	
+		//sequential consistency: same as linearizability
+	
+		//eventual consistency W=1:
+			//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+				//an ack is unnecessary because the requester only checked 1 insert (itself)
+			//ack: not applicable, see line above
+	
+		//eventual consistency W=2:
+			//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+				//send an ack to requesting node of form (don't have to append any timestamp)
+				//insert key value model <requestingnodeid> <requestnumber> ack <timestamp>
+			//ack: look in recvacks to see how many acks we have received with identifier:
+				//insert key value model <requestingnodeid> <requestnumber>
+				//if recvacks has 1 more ack to receive, store 0 in recvacks
+					//print "Inserted key <key>"
+					//mark cmdComplete as true
+				//if recvacks has 0, do nothing
+	}
+	
+	
+	/*
+	 * When a MessageReceiverThread receives an update message,
+	 * this method either sends a reply, completes an update operation, or does nothing
+	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 */
+	public void respondToUpdateMessage(String input) {
+		// TODO Implement
+		//UPDATE
+		//linearizability:
+			//req: update the key and value and attached timestamp in sharedData, print
+				//"Key <key> changed from <old value> to <value>"
+				//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
+				//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+			//ack: look in recvacks to see how many acks we have received with identifier:
+				//update key value model <requestingnodeid> <requestnumber>
+				//if recvacks has more than 1 more acks to receive, store that number decremented
+				//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Key <key> updated to <value>"
+					//mark cmdComplete as true
+	
+		//sequential consistency: same as linearizability
+	
+		//eventual consistency W=1:
+			//req: if this Node's sharedData has a copy of the key, update it to value
+				//print "Key <key> changed from <oldvalue> to <value>"
+				//respond to requestingnode on peer channel with an ack of the form
+				//update key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+			//req: if this Node's sharedData does not have a copy of the key,
+				//respond to requestingnode on peer channel with an ack of the form
+				//update key model <requestingnodeid> <requestnumber> ack null <timestamp> <senttimestamp>
+			//ack: look in recvacks to see how many acks we have received with identifier:
+				//update key model <requestingnodeid> <requestnumber>
+				//if recvacks has 1 more ack to receive, and this ack does not say null after ack
+					//store 0 in recvacks and print "Key <key> updated to <value>"
+					//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+					//mark cmdComplete as true
+				//if recvacks has 1 more ack to receive, and this ack says null after ack
+					//store 1 more null ack received in recvacks' nullacks ArrayList
+					//if 3 such null acks have been received,
+						//print "Key <key> does not exist in system, attempted update failed"
+						//store 0 in recvacks
+						//mark cmdComplete as true
+				//if recvacks has 0 more acks to receive, do nothing
+	
+		//eventual consistecy W=2:
+			//req: same as eventual consistency W=1
 
-		
-		
-		//For linearizability: If node is myself...
-			//if "get", print from local map
-			//L: delete requests won't get here, they are handled in MessageReceiverThread, line 59
-			//else if write/del requests, modify data and then send out ack (and then ack counter for eventual)
-		
-		//Eventual consistency (worry about this last!!)
-			//send acks over peer channels, not leader channel
-			//if not enough copies exist in the system on an update req, add enough copies to the system
-		
-		String output = input;
-		
-		System.out.println("Responded to "+input);
+			//ack: look in recvacks to see how many acks we have received with identifier:
+				//update key model <requestingnodeid> <requestnumber>
+				//if recvacks has 2 more acks to receive, and this ack does not say null after ack
+					//store 1 in recvacks
+				//if recvacks has 2 more acks to receive, and this ack says null after ack
+					//store 1 more null ack received in recvacks' nullacks ArrayList
+					//if 3 such null acks have been received, print
+						//"Key <key> does not exist in system, attempted update failed"
+						//store 0 in recvacks
+						//then mark cmdComplete as true
+				//if recvacks has 1 more ack to receive, and this ack does not say null after ack
+					//store 0 in recvacks, print "Key <key> updated to <value>"
+					//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+					//mark cmdComplete as true
+				//if recvacks has 1 more ack to receive, and this ack says null after ack
+					//store 1 more null ack received in recvacks' nullacks ArrayList
+					//if 3 such null acks have now been received, send out a special message to 1 Node
+						//telling them to insert this key/value/timestamp
+						//wait until you have received the ack for this, then print
+						//"Key <key> updated to <value>"
+						//store 0 in recvacks
+						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+						//mark cmdComplete as true
+					//if 2 such null acks have now been received and sharedData does not have this key,
+						//insert this key/value/<timestamp> into sharedData
+						//print "Key <key> changed from null to <value>"
+						//print "Key <key> updated to <value>"
+						//store 0 in recvacks
+						//send "writeglobal <key> <value> <timestamp>" (the original ts of message) to leader
+						//mark cmdComplete as true
+				//if recvacks has 0 more acks to receive, do nothing
+	}
+	
+	
+	/*
+	 * When a MessageReceiverThread receives a search message,
+	 * this method either sends a reply, processes a reply, or completes a search operation
+	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 */
+	public void respondToSearchMessage(String input) {
+		// TODO Implement
+		//SEARCH
+		//req: respond with an ack of the form
+			//search key <requestingnodeid> <requestnumber> <myNodeId> ack <timestamp>
+			//if this node doesn't have the key in sharedData, put "null" as <myNodeId> (else put this node's id)
+		//ack: look in recvacks to see how many acks we have received with identifier:
+			//search key <requestingnodeid> <requestnumber>
+			//if recvacks has more than 1 more ack to receive, and this ack does not say "null"
+				//store that number decremented in recvacks, store <myNodeId> in recvacks' validacks ArrayList
+			//if recvacks has more than 1 more ack to receive, and this ack says "null"
+				//store that number decremented in recvacks
+			//if recvacks has 1 ack to receive, store 0 in recvacks and
+				//print out "Key exists in these replicas: "
+				//this Node's id if it has key, then print out <myNodeId> for this ack if it's not "null"
+				//then print out all the nodeids stored in recvacks' validacks ArrayList
+				//mark cmdComplete as true
+	}
+	
+	
+	/*
+	 * When a MessageReceiverThread receives a repair message,
+	 * this method makes sure this Node's sharedData is up-to-date
+	 * with the most recent write in the system
+	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 */
+	public void respondToRepairMessage(String input) {
+		// TODO Implement
+		//REPAIR: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
+		//for every key in the message
+			//if it's not in this Node's sharedData
+			//or its associated timestamp in sharedData is less recent than the one in the message
+				//update sharedData with the message's value and associated timestamp
+			//else this Node's sharedData has the more recent write info, so do nothing
 	}
 	
 }

@@ -28,7 +28,7 @@ public class Node {
 	//Number of consistency model requests made by this Node
 	public int reqcnt = 0;
 	//Map that tracks how many acks we HAVE YET TO RECEIVE for a message
-	public ConcurrentHashMap<String, Integer> recvacks;
+	public ConcurrentHashMap<String, AckTracker> recvacks;
 
 	private ServerSocket server;
 	public BufferedReader inputs = null;
@@ -212,7 +212,7 @@ public class Node {
         	senders[i] = null;
         }
         
-        recvacks = new ConcurrentHashMap<String, Integer>();
+        recvacks = new ConcurrentHashMap<String, AckTracker>();
         sharedData = new ConcurrentHashMap<String, Datum>();
 
 		//Start the CommandInputThread thread that will eventually spawn MessageDelayerThread Threads
