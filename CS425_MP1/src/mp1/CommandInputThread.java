@@ -454,7 +454,7 @@ public class CommandInputThread extends Thread {
 				String key = msg.msg.substring(4, msg.msg.length()-2);
 				Datum value = node.sharedData.get(key);
 				if (value == null) //key is not in replica
-					System.out.print("get("+key+") = (NO KEY FOUND)");
+					System.out.print("get("+key+") = (NO KEY FOUND)"); //TODO: any reason why this doesnt new line?
 				else
 					System.out.println("get("+key+") = "+value.value);
 				
@@ -904,13 +904,63 @@ public class CommandInputThread extends Thread {
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 	
+	public String helperParseGetAckTS(String input, AckTracker acks) {
+		//TODO: determine which to use, question written in another todo way below
+		/*
+		//Extract associatedvaluetimestamp
+		String prevAssocTS = acks.validacks.get(0);
+		int j = prevAssocTS.lastIndexOf("ack")-2;
+		StringBuilder build = new StringBuilder();
+		while (prevAssocTS.charAt(j) != ' ') { //move thru key
+			build.append(prevAssocTS.charAt(j));
+			j--;
+		}*/
+		//Extract timestamp
+		String prevAssocTS = acks.validacks.get(0);
+		int i = prevAssocTS.length()-1;
+		StringBuilder build = new StringBuilder();
+		while (prevAssocTS.charAt(i) != ' ') {
+			build.append(prevAssocTS.charAt(i));
+			i--;
+		}
+		
+		return build.toString();
+	}
 	
+	public String helperParseGetAckVal(String input){
+		//Extract the 'value' suggested by this previously received ack msg
+		int i = 4; //"get "
+		//skip key
+		while (input.charAt(i) != ' ') {
+			i++;
+		}
+		//skip model and reqnodeId,
+		//now at request number
+		i = i+5;
+		while (input.charAt(i) != ' ') {
+			i++;
+		}
+		//value (after req num, behind assocTS string)
+		i++; //skip the space
+		StringBuilder build = new StringBuilder();
+		while (input.charAt(i) != ' ') {
+			build.append(input.charAt(i));
+			i++;
+		}
+		
+		return build.toString();
+	}
 	/*
 	 * When a MessageReceiverThread receives a get message,
 	 * this method either sends a reply, completes a get operation, or does nothing
 	 * Updates this.cmdComplete when the necessary number of acks have been received
 	 */
+	//TODO: When you send out a req message, all other nodes receive the req at the exact same time all the time.
+	//Is this intended behavior?
 	public void respondToGetMessage(String input) {
+		
+		//input (if req) : get key model <reqNodeId> <reqnumber> req <timestamp>
+		//input (if ack) : get key model <reqNodeId> <reqnumber> <value> <associatedvaluetimestamp> ack <timestamp>
 		
 		int len = input.length();
 		StringBuilder builder;
@@ -932,15 +982,42 @@ public class CommandInputThread extends Thread {
 		int reqNodeIdx = node.getIndexFromId(reqNodeId);
 		
 		//request number
-		
+		i = i+5;
+		builder = new StringBuilder();
+		while (input.charAt(i) != ' ') {
+			builder.append(input.charAt(i));
+			i++;
+		}
+		String reqNumber = builder.toString();
+		int reqNumberEndIndex = i; //the index for the space after reqNumber for future reference
 		
 		//Determine if input is req or ack messages
 		int reqat = input.lastIndexOf("req");
 		int ackat = input.lastIndexOf("ack");
 		int reqorackat = Math.max(reqat, ackat);
 		
+		String curMsgVal = "USHUDNOTBESEEINGTHISTXT";
+		String curMsgAssocTS = "USHUDNOTBESEEINGTHISTXT";
+		if(ackat!=-1) { //if ack get message
+			//value (after req num, behind assocTS string)
+			i++; //skip the space
+			builder = new StringBuilder();
+			while (input.charAt(i) != ' ') {
+				builder.append(input.charAt(i));
+				i++;
+			}
+			curMsgVal = builder.toString();
+			
+			//assocTS (behind req/ack string)
+			i++; //skip space
+			builder = new StringBuilder();
+			while (input.charAt(i) != ' ') {
+				builder.append(input.charAt(i));
+				i++;
+			}
+			curMsgAssocTS = builder.toString();
+		}
 		
-		//value (behind req/ack string
 		
 		//Extract timestamp of get operation invocation
 		builder = new StringBuilder();
@@ -952,7 +1029,7 @@ public class CommandInputThread extends Thread {
 		long writets = Long.parseLong(builder.toString());
 		
 		//This format of the message represents a unique identifier for the request
-		String identifier = input.substring(0, reqorackat-1);
+		String identifier = input.substring(0, reqNumberEndIndex);//TODO: CONFIRM CHANGE: reqorackat-1 -> reqNumberEndIndex
 		
 		AckTracker acks = node.recvacks.get(identifier);
 		
@@ -961,7 +1038,10 @@ public class CommandInputThread extends Thread {
 			case 1:	//linearizability: (the request only gets sent back to the requestingNode)
 				if (reqat != -1) { //req
 					//print out "get(<key>) = <value>" from sharedData
-					System.out.println("get("+key+") = "+node.sharedData.get(key).value);
+					if (node.sharedData.get(key)==null)
+						System.out.println("get("+key+") = (NO KEY FOUND)");
+					else
+						System.out.println("get("+key+") = "+node.sharedData.get(key).value);
 					
 					cmdComplete=true;
 				}
@@ -990,46 +1070,47 @@ public class CommandInputThread extends Thread {
 					
 					//send requestingnode (along peer connection) an ack of form
 					//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
-					String ack = new String(input.substring(0, reqat) + val + " ");
+					String ack = new String(input.substring(0, reqNumberEndIndex) +" " + val + " ");
 					if (assocTS==0)
-						ack = ack + "null ack ";
+						ack = ack + "null ack";
 					else
-						ack = ack + assocTS + " ack ";
+						ack = ack + assocTS + " ack";
 					
 					//ack = ack + input.substring(reqat + 4); //... <timestamp>
 					
 					long ts = System.currentTimeMillis();
 					addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
-					
 				}
 				else { //ack
-					//look in recvacks to see how many acks we have received with identifier:
-					//get key model <requestingnodeid> <requestnumber>
+					if (acks == null) {
+						
+					}
+							
+					//look in recvacks to see how many acks we have received with the following identifier:
+					//"get key model <requestingnodeid> <requestnumber>"
 					if (acks == null || acks.toreceive < 1) {
 						//do nothing
 					}
-					//L: if "null" occurs anywhere in the ack, then effectively, both the value and assocts are null
-					else if (acks.toreceive==1 && input.lastIndexOf("null") == -1) { //TODO can assocts be null but value be not null?
+					else if (acks.toreceive==1 && input.lastIndexOf("null") == -1) {
 						//if recvacks has 1 more ack to receive (R=1) and ack doesn't have "null" as value,
 						//store 0 in recvacks
 						acks.toreceive = 0;
-						node.recvacks.put(identifier, acks);
+						
 						//print "get(<key>) = (<value>, <associatedvaluetimestamp>)"
-						//TODO replace node.sharedData with the input message????
-						//L: No, since it is eventually consistent, sharedData will either get updated when it receives
-						//L: the insert/update that this more recent assocts comes from, or else it will change on a repair
-						System.out.println("get("+key+") = ("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
+						System.out.println("get("+key+") = ("+curMsgVal+", "+curMsgAssocTS+")");
 						//then print "(<value>, <associatedvaluetimestamp>)" on a new line...
-						System.out.println("("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
+						System.out.println("("+curMsgVal+", "+curMsgAssocTS+")");
 						cmdComplete = true;
+						
+						//TODO: x-> node.recvacks.put(identifier, acks);
 					}
 					else if (acks.toreceive==1 && input.lastIndexOf("null") != -1) {
 						//if recvacks has 1 more ack to receive (R=1) and ack has "null" as value,
 						//store 1 more null ack received in recvacks' nullacks ArrayList
-						acks.nullacks.add(identifier);
+						acks.nullacks.add(input);
 						
 						if(acks.nullacks.size()>=3){
-							//if 3 such null acks have been received now,
+							//if 3 such null acks have been received now (no one else could find the key)
 							//print "get(<key>) = (NO KEY FOUND)"
 							System.out.println("get("+key+") = (NO KEY FOUND)");
 							//store 0 in recvacks
@@ -1037,8 +1118,7 @@ public class CommandInputThread extends Thread {
 							
 							cmdComplete = true;
 						}
-						
-						node.recvacks.put(identifier, acks);
+						//TODO: x-> node.recvacks.put(identifier, acks);
 					}
 					else {
 						//yay						
@@ -1066,11 +1146,13 @@ public class CommandInputThread extends Thread {
 					
 					//send requestingnode (along peer connection) an ack of form
 					//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
-					String ack = new String(input.substring(0, reqat) + val + " ");
+					String ack = new String(input.substring(0, reqNumberEndIndex) + " " + val + " ");
+					//TODO: double check if the change: reqAt->reqNumberEndIndex, was correct - same change
+					//present in model 3 get req.
 					if (assocTS==0)
-						ack = ack + "null ack ";
+						ack = ack + "null ack";
 					else
-						ack = ack + assocTS + " ack ";
+						ack = ack + assocTS + " ack";
 					
 					//ack = ack + input.substring(reqat + 4); //... <timestamp>
 					
@@ -1078,8 +1160,9 @@ public class CommandInputThread extends Thread {
 					addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
 					
 				}
-				else {	//ack: look in recvacks to see how many acks we have received with identifier:
-					//get key model <requestingnodeid> <requestnumber>
+				else {
+					//ack: look in recvacks to see how many acks we have received with followingidentifier:
+					//"get key model <requestingnodeid> <requestnumber>"
 					if (acks != null && acks.toreceive == 2 && input.lastIndexOf("null") == -1) {
 						//if recvacks has 2 more acks to receive (R=2) and this ack doesn't have "null" as value,
 						//store 1 in recvacks
@@ -1087,12 +1170,12 @@ public class CommandInputThread extends Thread {
 						//store the received (value,associatedtimestamp) in recvacks' validacks ArrayList
 						acks.validacks.add(input);
 						
-						node.recvacks.put(identifier, acks);
+						//TODO: x-> node.recvacks.put(identifier, acks);
 					}
 					else if (acks.toreceive == 2 && input.lastIndexOf("null") != -1) {
-						//if recvacks has 2 more acks to receive (R=2) and this ackhas "null" as value,
+						//if recvacks has 2 more acks to receive (R=2) and this ack has "null" as value,
 						//store 1 more null ack received recvacks' nullacks ArrayList
-						acks.toreceive+=1;
+						acks.nullacks.add(input);
 						
 						//if 3 such null acks have been received now,
 						if(acks.nullacks.size()>=3) {
@@ -1103,7 +1186,7 @@ public class CommandInputThread extends Thread {
 							
 							cmdComplete = true;
 						}
-						node.recvacks.put(identifier, acks);
+						//TODO: x-> node.recvacks.put(identifier, acks);
 					}
 					else if (acks.toreceive == 1 && input.lastIndexOf("null") == -1){
 						//if recvacks has 1 more ack to receive and this ack doesn't have "null" as value,
@@ -1113,41 +1196,68 @@ public class CommandInputThread extends Thread {
 						//compare the previously received ack (stored in recvacks' validacks ArrayList) and the current received one
 						//Technically previously received one is the last index, but since we do it on 2nd msg receive, it's also the first index
 						
+						//TODO: which one? (edit the helper function for fix)
+						// AssocTS =  timestamp of when the source node sends out the get msg for the first time
+						// (will always be the same across all ack messages)
+						// vs. TS = timestamp of when a node sent this ack message
+						// (different for each ack messages stored in acks.validacks)
+						//Extract value & timestamp
+						String prevVal = helperParseGetAckVal(input);
+						String prevTS_str = helperParseGetAckTS(input,acks);
+						long prevTS;
+						if (prevTS_str.lastIndexOf("null") == -1)
+							prevTS = Long.parseLong(prevTS_str);
+						else
+							prevTS = Long.MAX_VALUE;
+						
 						//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the more recent one
-						//Extract timestamp
-						String prevAssocTS = acks.validacks.get(0);
-						int j = prevAssocTS.lastIndexOf("ack")-2;
-						StringBuilder build = new StringBuilder();
-						while (prevAssocTS.charAt(j) != ' ') { //move thru key
-							build.append(prevAssocTS.charAt(j));
-							j--;
-						}
-						
-						long prevTS = Long.parseLong(build.toString());
-						
-						//TODO replace node.sharedData with the input message????
-						//L: No, since it is eventually consistent, sharedData will either get updated when it receives
-						//L: the insert/update that this more recent assocts comes from, or else it will change on a repair
+						//TODO: <associatedvaluetimestamp> should be <timestamp> no? Coded below as timestamp
 						if (prevTS < writets) {
 							//writets is more recent
-							System.out.println("get("+key+") = ("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
+							System.out.println("get("+key+") = ("+curMsgVal+", "+writets+")");
 						}
 						else
-							System.out.println("get("+key+") = ("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
+							System.out.println("get("+key+") = ("+prevVal+", "+prevTS+")");
 							
+						//print "(<value>, <timestamp>)" for both examined ack's
+						System.out.println("("+curMsgVal+", "+writets+")");
+						System.out.println("("+prevVal+", "+prevTS+")");
 						
-						//print "(<value>, <timestamp>)" for the both
 						cmdComplete = true;
+						//TODO: x-> node.recvacks.put(identifier, acks);
+						
 					}
 					else if (acks.toreceive == 1 && input.lastIndexOf("null") != -1){
-						//if recvacks has 1 more ack to receive and this ack has "null" as value,
-						//TODO:
+						//if we had already accepted 1 valid ack but received a null ack just now
+						//aka: recvacks has 1 more ack to receive and this ack has "null" as value,
+						
 						//if 1 such null ack has already been received:
+						if(acks.nullacks.size()==1) {
+							//We received acks back from all 3 other nodes. Must resort to the first valid ack
+							
 							//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the non-null ack in recvacks' validacks ArrayList
+							String prevVal=helperParseGetAckVal(acks.validacks.get(0));
+							String prevTS_str = helperParseGetAckTS(input,acks);
+							long prevTS;
+							if (prevTS_str.lastIndexOf("null") == -1)
+								prevTS = Long.parseLong(prevTS_str);
+							else
+								prevTS = Long.MAX_VALUE;
+							
+							System.out.println("get("+key+") = ("+ prevVal +", "+ prevTS +")");
+							
 							//store 0 in recvacks
-							//mark cmdComplete as true
-						//if no such null acks have been received yet:
+							acks.toreceive=0;
+							
+							cmdComplete = true;
+							//TODO: x-> node.recvacks.put(identifier, acks);
+						}
+						else if(acks.nullacks.size()==0) {
+							//if no such null acks have been received yet:
+							
 							//store 1 more null ack received in recvacks' nullacks ArrayList
+							acks.nullacks.add(input);
+						}
 					}
 				}
 		}
