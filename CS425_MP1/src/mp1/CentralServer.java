@@ -188,7 +188,7 @@ public class CentralServer {
             	String input = "";
     			while ((input = in.readLine())==null) {} //get recvIdx from MessageSenderThread
     			int idx = Integer.parseInt(input);
-    			setReceivingThreadIndex(idx, new MessageRelayThread(this, socket, in, mqin));
+    			setReceivingThreadIndex(idx, new MessageRelayThread(this, socket, in, mqin, idx));
     			
 				count++;
             } catch(Exception e){

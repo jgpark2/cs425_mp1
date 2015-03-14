@@ -1,9 +1,7 @@
 package mp1;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
@@ -205,9 +203,11 @@ public class CommandInputThread extends Thread {
 	public void addMessageToNodeQueue(MessageType msg, int recvIdx) {
 		//Calculate random delay
 		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
+//		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" is "+randint+" milliseconds");
 				
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
 		msg.ts = new Long(Math.max(msg.ts + (long)randint, last[recvIdx].ts.longValue()));
+//		System.out.println("Adjusted receive time to "+nodesinfo[recvIdx].id+" is "+msg.ts);
 			
 		try {
 			mqnodearr.get(recvIdx).put(msg);
@@ -578,7 +578,7 @@ public class CommandInputThread extends Thread {
 				node.recvacks.put(msg.msg, new AckTracker(4));
 				msg.msg = msg.msg + " " + "req";
 				addMessageToLeaderQueue(msg); //this method adds the timestamp
-				break;
+				return;
 			}
 			
 			case 2: {
@@ -588,7 +588,7 @@ public class CommandInputThread extends Thread {
 				node.recvacks.put(msg.msg, new AckTracker(4));
 				msg.msg = msg.msg + " " + "req";
 				addMessageToLeaderQueue(msg); //this method adds the timestamp
-				break;
+				return;
 			}
 			
 			case 3: {
@@ -640,7 +640,7 @@ public class CommandInputThread extends Thread {
 			}
 		}
 		
-		//In addition, regardless of the consistency model, this insert should occur in globalData
+		//In addition, for both eventual consistency models, this insert should occur in globalData
 		//addMessageToLeaderQueue adds the timestamp of invocation of this insert
 		MessageType writeglobal = new MessageType("", msg.ts);
 		writeglobal.msg = "writeglobal "+key+" "+value;
@@ -773,10 +773,6 @@ public class CommandInputThread extends Thread {
 		node.recvacks.put(msg.msg, new AckTracker(4));
 		msg.msg = msg.msg + " " + "req";
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
-		
-		MessageType writeglobal = new MessageType("", msg.ts);
-		writeglobal.msg = "writeglobal "+key+" "+value;
-		addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
 		
 	}
 	

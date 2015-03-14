@@ -26,7 +26,9 @@ public class MessageRouterThread extends Thread {
 	//These are calculated once and saved to be more efficient
 	private Double [] millismaxdelays;
 	private int [] intmaxdelays;
-	private MessageType [] last;
+	
+	//This is 2D to represent all channels from a unique Id to a unique Id
+	private MessageType [][] last;
 	
 
 	public MessageRouterThread(CentralServer centralServer,
@@ -40,13 +42,14 @@ public class MessageRouterThread extends Thread {
 		millismaxdelays = new Double[4];
 		intmaxdelays = new int[4];
 		r = new Random();
-		last = new MessageType[4];
+		last = new MessageType[4][4];
 		mqoutarr = new ArrayList< ArrayBlockingQueue<MessageType> >(4);
 		
 		for (int i=0; i<4; i++) {
 			millismaxdelays[i] = new Double(nodesinfo[i].max_delay*1000.0);
 			intmaxdelays[i] = millismaxdelays[i].intValue();
-			last[i] = new MessageType();
+			for (int j=0; j<4; j++)
+				last[i][j] = new MessageType();
 			mqoutarr.add(new ArrayBlockingQueue<MessageType>(mqmax));
 		}
 		
@@ -76,13 +79,16 @@ public class MessageRouterThread extends Thread {
 		//Remove a message from the in-message queue and determine where it goes
 		try {
 			while (true) {
-				String msg = mqin.take();
+				String msg = mqin.take(); //has Node it received it from appended
 				
 				ArrayList<Integer> list = parseMessageForReceivingNodes(msg);
+				int fromIdx = centralServer.getIndexFromId(msg.substring(msg.length()-1));
+				msg = msg.substring(0, msg.length()-2); //take off space and fromId
+				
 				for (int i=0; i<list.size(); i++) {
 	        		Integer idx = list.get(i);
 	        		int recvIdx = idx.intValue();
-	        		calculateDelayAndAddToQueue(recvIdx, msg);
+	        		calculateDelayAndAddToQueue(recvIdx, fromIdx, msg);
 	        	}
 				
 			}
@@ -98,7 +104,7 @@ public class MessageRouterThread extends Thread {
 	 * timestamp of the invocation of the operation (whether req or ack)
 	 * appended to the end of the message as a long type
 	 */
-	private void calculateDelayAndAddToQueue(int recvIdx, String msg) {
+	private void calculateDelayAndAddToQueue(int recvIdx, int fromIdx, String msg) {
 		
 		//parse the end of the message to figure out when it was timestamped
 		int i = msg.length()-1;
@@ -109,15 +115,16 @@ public class MessageRouterThread extends Thread {
 		
 		//Calculate random delay
 		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
+//		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" is "+randint+" milliseconds");
 		
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
-		Long tosendts = new Long(Math.max(ts + (long)randint, last[recvIdx].ts.longValue()));
+		Long tosendts = new Long(Math.max(ts + (long)randint, last[fromIdx][recvIdx].ts.longValue()));
 		
 		MessageType tosend = new MessageType(msg, tosendts);
 		
 		try {
 			mqoutarr.get(recvIdx).put(tosend);
-			last[recvIdx] = tosend;
+			last[fromIdx][recvIdx] = tosend;
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -144,6 +151,7 @@ public class MessageRouterThread extends Thread {
 	/*
 	 * Takes a message from the in-message queue and decides which Nodes
 	 * should receive it
+	 * The message has the Node it came from appended
 	 */
 	private ArrayList<Integer> parseMessageForReceivingNodes(String msg) {
 		

@@ -44,9 +44,8 @@ public class RepairThread extends Thread {
 				Datum value = centralServer.globalData.get(key);
 				msg.msg = msg.msg + " " + key + " " + value.value + " " + value.timestamp;
 			}
-			
-			//TODO: if we want this message to be subject to "channel delays",
-			//then we need to call calculateDelayAndAddToQueue in a for loop
+
+			//This is not subject to delay because it is initiated by "the system"
 			router.addMessageToAllQueues(msg);
 		}
 		
