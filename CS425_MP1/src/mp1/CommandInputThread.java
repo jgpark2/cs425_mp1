@@ -454,7 +454,7 @@ public class CommandInputThread extends Thread {
 				String key = msg.msg.substring(4, msg.msg.length()-2);
 				Datum value = node.sharedData.get(key);
 				if (value == null) //key is not in replica
-					System.out.print("get("+key+") = (NO KEY FOUND)"); //TODO: any reason why this doesnt new line?
+					System.out.println("get("+key+") = (NO KEY FOUND)");
 				else
 					System.out.println("get("+key+") = "+value.value);
 				
@@ -905,8 +905,8 @@ public class CommandInputThread extends Thread {
 	}
 	
 	public String helperParseGetAckTS(String input, AckTracker acks) {
-		//TODO: determine which to use, question written in another todo way below
-		/*
+
+		
 		//Extract associatedvaluetimestamp
 		String prevAssocTS = acks.validacks.get(0);
 		int j = prevAssocTS.lastIndexOf("ack")-2;
@@ -914,7 +914,8 @@ public class CommandInputThread extends Thread {
 		while (prevAssocTS.charAt(j) != ' ') { //move thru key
 			build.append(prevAssocTS.charAt(j));
 			j--;
-		}*/
+		}
+		/*
 		//Extract timestamp
 		String prevAssocTS = acks.validacks.get(0);
 		int i = prevAssocTS.length()-1;
@@ -922,7 +923,7 @@ public class CommandInputThread extends Thread {
 		while (prevAssocTS.charAt(i) != ' ') {
 			build.append(prevAssocTS.charAt(i));
 			i--;
-		}
+		}*/
 		
 		return build.toString();
 	}
@@ -1028,7 +1029,8 @@ public class CommandInputThread extends Thread {
 		long writets = Long.parseLong(builder.toString());
 		
 		//This format of the message represents a unique identifier for the request
-		String identifier = input.substring(0, reqNumberEndIndex);//TODO: CONFIRM CHANGE: reqorackat-1 -> reqNumberEndIndex
+		String identifier = input.substring(0, reqNumberEndIndex);//CONFIRM CHANGE: reqorackat-1 -> reqNumberEndIndex
+		//L: confirmed, reqNumberEndIndex is the same as reqorackat-1 for a req (and will be correct for identifier in ack too)
 		
 		AckTracker acks = node.recvacks.get(identifier);
 		
@@ -1146,7 +1148,7 @@ public class CommandInputThread extends Thread {
 					//send requestingnode (along peer connection) an ack of form
 					//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
 					String ack = new String(input.substring(0, reqNumberEndIndex) + " " + val + " ");
-					//TODO: double check if the change: reqAt->reqNumberEndIndex, was correct - same change
+					//L: confirmed that the change: reqAt->reqNumberEndIndex, was correct - same change
 					//present in model 3 get req.
 					if (assocTS==0)
 						ack = ack + "null ack";
@@ -1195,15 +1197,19 @@ public class CommandInputThread extends Thread {
 						//compare the previously received ack (stored in recvacks' validacks ArrayList) and the current received one
 						//Technically previously received one is the last index, but since we do it on 2nd msg receive, it's also the first index
 						
-						//TODO: which one? (edit the helper function for fix)
+						//L: editted the helper function for fix
 						// AssocTS =  timestamp of when the source node sends out the get msg for the first time
 						// (will always be the same across all ack messages)
 						// vs. TS = timestamp of when a node sent this ack message
 						// (different for each ack messages stored in acks.validacks)
+						// L: the assocts is associated with the write req that last changed the key
+						// L: (may be different across replicas if repair hasn't been run and 2 different update(model=4)
+						// L: have been run)
 						//Extract value & timestamp
 						String prevVal = helperParseGetAckVal(input);
 						String prevTS_str = helperParseGetAckTS(input,acks);
 						long prevTS;
+						//TODO: L: any ack stored in validacks should NOT have null in it
 						if (prevTS_str.lastIndexOf("null") == -1)
 							prevTS = Long.parseLong(prevTS_str);
 						else
