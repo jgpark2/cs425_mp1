@@ -1707,17 +1707,61 @@ public class CommandInputThread extends Thread {
 	 * When a MessageReceiverThread receives a repair message,
 	 * this method makes sure this Node's sharedData is up-to-date
 	 * with the most recent write in the system
-	 * Updates this.cmdComplete when the necessary number of acks have been received
+	 * Message form: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
+	 * This is one of the few/only messages without a <senttimestamp> field at the end of it
+	 *      so that when we reach the end of the keys, we know
 	 */
 	public void respondToRepairMessage(String input) {
-		// TODO Implement (L)
-		//REPAIR: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
-		//for every key in the message
+		
+//		System.out.println("Repair message received: "+input);
+
+		int len = input.length();
+		int i = 7;
+		StringBuilder builder;
+		
+		while (i < len) { //for every key in the message
+			
+			//Extract key
+			builder = new StringBuilder();
+			while (i < len && input.charAt(i) != ' ') { //move thru key
+				builder.append(input.charAt(i));
+				i++;
+			}
+			String key = builder.toString();
+			i++; //move past space between key and value
+			
+			//Extract value
+			builder = new StringBuilder();
+			while (i < len && input.charAt(i) != ' ') { //move thru value
+				builder.append(input.charAt(i));
+				i++;
+			}
+			String value = builder.toString();
+			i++; //move past space between value and assocts
+			
+			//Extract associated timestamp
+			builder = new StringBuilder();
+			while (i < len && input.charAt(i) != ' ') { //move thru assocts
+				builder.append(input.charAt(i));
+				i++;
+			}
+			long ts = Long.parseLong(builder.toString());
+			
+			i++; //move past potential space between assocts and key
+			
+			
+			Datum curvalue = node.sharedData.get(key);
+			
 			//if it's not in this Node's sharedData
 			//or its associated timestamp in sharedData is less recent than the one in the message
+			if (curvalue == null || curvalue.timestamp < ts) {
 				//update sharedData with the message's value and associated timestamp
+				node.sharedData.put(key, new Datum(value, ts));
+			}
 			//else this Node's sharedData has the more recent write info, so do nothing
-		//System.out.println("Received repair message: "+input);
+			
+		}
+
 	}
 	
 }

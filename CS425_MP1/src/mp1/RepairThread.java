@@ -35,7 +35,8 @@ public class RepairThread extends Thread {
 				return;
 			}
 			
-			MessageType msg = new MessageType("repair", System.currentTimeMillis());
+			//Since this message won't be delayed, the timestamp doesn't matter
+			MessageType msg = new MessageType("repair", new Long(0));
 			
 			Set<String> keyset = centralServer.globalData.keySet();
 			Iterator<String> it = keyset.iterator();
