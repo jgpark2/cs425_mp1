@@ -961,10 +961,9 @@ public class CommandInputThread extends Thread {
 		
 		//input (if req) : get key model <reqNodeId> <reqnumber> req <timestamp>
 		//input (if ack) : get key model <reqNodeId> <reqnumber> <value> <associatedvaluetimestamp> ack <timestamp>
-		
-		int len = input.length();
+
 		StringBuilder builder;
-		int i = 4;
+		int i = "get ".length();
 		
 		//Extract key
 		builder = new StringBuilder();
@@ -1022,7 +1021,7 @@ public class CommandInputThread extends Thread {
 		//Extract timestamp of get operation invocation
 		builder = new StringBuilder();
 		i  = reqorackat + 4; //move to the timestamp immediately after req/ack
-		while (i < len && input.charAt(i) != ' ') { //move thru timestamp
+		while (i < input.length() && input.charAt(i) != ' ') { //move thru timestamp
 			builder.append(input.charAt(i));
 			i++;
 		}
@@ -1265,43 +1264,127 @@ public class CommandInputThread extends Thread {
 		//System.out.println("Received get message: "+input);
 	}
 	
-	
+	public ReceivedInputElements helperMotherOfParse(String input){
+		ReceivedInputElements ret = new ReceivedInputElements();
+
+		String[] elems = input.split("\\s+");
+		ret.definition 	= elems[0];
+		ret.key 		= elems[1];
+		ret.key_value 	= elems[2];
+		ret.model 		= elems[3];
+		ret.reqNodeId 	= elems[4];
+		ret.reqNum		= elems[5];
+		ret.replyType	= elems[6];
+		ret.timestamp 	= elems[7];
+		ret.identifier = "";
+		for(int i=0; i<6; ++i) {
+			ret.identifier += elems[i];
+			if (i<5)
+				ret.identifier+=" ";
+		}
+		
+		return ret;
+	}
 	/*
 	 * When a MessageReceiverThread receives an insert message,
 	 * this method either sends a reply, completes an insert operation, or does nothing
 	 * Updates this.cmdComplete when the necessary number of acks have been received
 	 */
 	public void respondToInsertMessage(String input) {
-		// TODO Implement
+		//---------------INSERT MESSAGE RESPONSE------------------//
+		//input (req) : insert key value model <reqnodeid> <req#> req <timestamp>
+		//input (ack) : insert key value model <reqnodeid> <req#> ack <origTS> <ackSentTS>
+		
+		ReceivedInputElements ins = helperMotherOfParse(input);
+		
+		AckTracker acks = node.recvacks.get(ins.identifier);
+		
 		//INSERT
-		//linearizability:
-			//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
-				//send an ack to leader of form, where <senttimestamp> is time when this Node sent message to leader
-				//insert key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
-			//ack: look in recvacks to see how many acks we have received with identifier:
-				//insert key value model <requestingnodeid> <requestnumber>
-				//if recvacks has more than 1 more acks to receive, store that number decremented
-				//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Inserted key <key>"
-					//mark cmdComplete as true
-	
-		//sequential consistency: same as linearizability
-	
-		//eventual consistency W=1:
-			//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
-				//an ack is unnecessary because the requester only checked 1 insert (itself)
-			//ack: not applicable, see line above
-	
-		//eventual consistency W=2:
-			//req: insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
-				//send an ack to requesting node of form (don't have to append any timestamp)
-				//insert key value model <requestingnodeid> <requestnumber> ack <timestamp>
-			//ack: look in recvacks to see how many acks we have received with identifier:
-				//insert key value model <requestingnodeid> <requestnumber>
-				//if recvacks has 1 more ack to receive, store 0 in recvacks
-					//print "Inserted key <key>"
-					//mark cmdComplete as true
-				//if recvacks has 0, do nothing
-		System.out.println("Received insert message: "+input);
+		switch (Integer.parseInt(ins.model)) {
+			case 1: //linearizability:
+				if (ins.replyType == "req") {
+					//insert the key and value and attached timestamp into sharedData
+					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
+					
+					System.out.println("Inserted key "+ins.key);
+					
+					//send an ack to leader of form:
+					//insert key value model <requestingnodeid> <requestnumber> ack <timestamp> <senttimestamp>
+					//where <senttimestamp> is time when this Node sent message to leader
+					String ackMsg = new String();
+					ackMsg+=ins.identifier;
+					ackMsg+=" ack "+ins.timestamp+" ";
+					Long ackTS = System.currentTimeMillis();
+					ackMsg += ackTS.toString();
+					addMessageToLeaderQueue(new MessageType(ackMsg, ackTS));
+				}
+				else { //ack:
+					//look in recvacks to see how many acks we have received with identifier:
+					//insert key value model <requestingnodeid> <requestnumber>
+					
+					//if recvacks has more than 1 more acks to receive, store that number decremented
+					//if recvacks has 1 more ack to receive, store 0 in recvacks and print "Inserted key <key>"
+					if(acks.toreceive>0)
+						acks.toreceive-=1;
+					if(acks.toreceive==0)
+						System.out.println("Inserted key "+ins.key);
+					cmdComplete = true;
+				}
+				break;
+			
+			case 2: //sequential consistency: same as linearizability; thus inapplicable
+				break;
+			
+			case 3: //eventual consistency R=1:
+				if (ins.replyType == "req") {
+					//insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
+					System.out.println("Inserted key "+ins.key);
+					
+					//an ack is unnecessary because the requester only checked 1 insert (itself)
+				}
+				else { //ack: not applicable, see line above
+					//insert the key and value and attached timestamp into sharedData
+				}
+				break;
+				
+			case 4:	//eventual consistency R=2:
+				if (ins.replyType == "req") { //req:
+					//insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
+					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
+					System.out.println("Inserted key "+ins.key);
+					
+					//send an ack to requesting node of form (don't have to append any timestamp)
+					//insert key value model <requestingnodeid> <requestnumber> ack <timestamp>
+					String ackMsg = new String();
+					ackMsg+=ins.identifier;
+					ackMsg+=" ack "+ins.timestamp;
+					addMessageToLeaderQueue(new MessageType(ackMsg, System.currentTimeMillis()));
+				}
+				else {//ack:
+					//look in recvacks to see how many acks we have received with identifier:
+					//insert key value model <requestingnodeid> <requestnumber>			
+					if (acks==null) {
+						System.out.println("DEBUG:uhoh");
+						cmdComplete = true;
+						return;
+					}
+						
+					//if recvacks has 1 more ack to receive, store 0 in recvacks
+					if(acks.toreceive==1) {
+						acks.toreceive=0;
+						
+						System.out.println("Inserted key "+ins.key);
+						//TODO: so, no actual inserting of the value?
+						cmdComplete = true;
+					}
+					else if (acks.toreceive==0) {
+						//TODO: cmdComplete?
+						//do nothing
+					}
+				}
+				break;
+		}
 	}
 	
 	
@@ -1391,6 +1474,7 @@ public class CommandInputThread extends Thread {
 					String ack = new String(input.substring(0, reqat) +"ack "); //update key value model <reqNodeId> <reqnum> ack
 					ack = ack + input.substring(reqat + 4); //<timestamp>
 					addMessageToLeaderQueue(new MessageType(ack, System.currentTimeMillis())); //adds senttimestamp
+					//TODO: notice some timestamp format difference in mode 3 vs mode 4 get's. address this
 				}
 				
 				else { //ack
