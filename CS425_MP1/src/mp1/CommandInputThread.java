@@ -1029,8 +1029,7 @@ public class CommandInputThread extends Thread {
 		long writets = Long.parseLong(builder.toString());
 		
 		//This format of the message represents a unique identifier for the request
-		String identifier = input.substring(0, reqNumberEndIndex);//CONFIRM CHANGE: reqorackat-1 -> reqNumberEndIndex
-		//L: confirmed, reqNumberEndIndex is the same as reqorackat-1 for a req (and will be correct for identifier in ack too)
+		String identifier = input.substring(0, reqNumberEndIndex);
 		
 		AckTracker acks = node.recvacks.get(identifier);
 		
@@ -1083,10 +1082,6 @@ public class CommandInputThread extends Thread {
 					addMessageToNodeQueue(new MessageType(ack+" "+ts, ts), reqNodeIdx);
 				}
 				else { //ack
-					if (acks == null) {
-						
-					}
-							
 					//look in recvacks to see how many acks we have received with the following identifier:
 					//"get key model <requestingnodeid> <requestnumber>"
 					if (acks == null || acks.toreceive < 1) {
@@ -1148,8 +1143,6 @@ public class CommandInputThread extends Thread {
 					//send requestingnode (along peer connection) an ack of form
 					//get key model <requestingnodeid> <requestnumber> <value> <associatedvaluetimestamp> ack <timestamp>
 					String ack = new String(input.substring(0, reqNumberEndIndex) + " " + val + " ");
-					//L: confirmed that the change: reqAt->reqNumberEndIndex, was correct - same change
-					//present in model 3 get req.
 					if (assocTS==0)
 						ack = ack + "null ack";
 					else
@@ -1210,22 +1203,20 @@ public class CommandInputThread extends Thread {
 						String prevTS_str = helperParseGetAckTS(input,acks);
 						long prevTS;
 						//TODO: L: any ack stored in validacks should NOT have null in it
-						if (prevTS_str.lastIndexOf("null") == -1)
+//						if (prevTS_str.lastIndexOf("null") == -1)
 							prevTS = Long.parseLong(prevTS_str);
-						else
-							prevTS = Long.MAX_VALUE;
+//						else
+//							prevTS = Long.MAX_VALUE;
 						
 						//print "get(<key>) = (<value>, <associatedvaluetimestamp>)" for the more recent one
-						//TODO: <associatedvaluetimestamp> should be <timestamp> no? Coded below as timestamp
-						if (prevTS < writets) {
-							//writets is more recent
-							System.out.println("get("+key+") = ("+curMsgVal+", "+writets+")");
+						if (prevTS < Long.parseLong(curMsgAssocTS)) {
+							System.out.println("get("+key+") = ("+curMsgVal+", "+curMsgAssocTS+")");
 						}
 						else
 							System.out.println("get("+key+") = ("+prevVal+", "+prevTS+")");
 							
-						//print "(<value>, <timestamp>)" for both examined ack's
-						System.out.println("("+curMsgVal+", "+writets+")");
+						//print "(<value>, <assorciatedtimestamp>)" for both examined ack's
+						System.out.println("("+curMsgVal+", "+curMsgAssocTS+")");
 						System.out.println("("+prevVal+", "+prevTS+")");
 						
 						cmdComplete = true;
@@ -1308,7 +1299,7 @@ public class CommandInputThread extends Thread {
 		//INSERT
 		switch (Integer.parseInt(ins.model)) {
 			case 1: //linearizability:
-				if (ins.replyType == "req") {
+				if (ins.replyType.compareTo("req")==0) {
 					//insert the key and value and attached timestamp into sharedData
 					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
 					
@@ -1342,7 +1333,7 @@ public class CommandInputThread extends Thread {
 				break;
 			
 			case 3: //eventual consistency R=1:
-				if (ins.replyType == "req") {
+				if (ins.replyType.compareTo("req")==0) {
 					//insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
 					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
 					System.out.println("Inserted key "+ins.key);
@@ -1355,7 +1346,7 @@ public class CommandInputThread extends Thread {
 				break;
 				
 			case 4:	//eventual consistency R=2:
-				if (ins.replyType == "req") { //req:
+				if (ins.replyType.compareTo("req")==0) { //req:
 					//insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
 					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
 					System.out.println("Inserted key "+ins.key);
@@ -1367,12 +1358,12 @@ public class CommandInputThread extends Thread {
 					ackMsg+=" ack "+ins.timestamp;
 					addMessageToLeaderQueue(new MessageType(ackMsg, System.currentTimeMillis()));
 				}
-				else {//ack:
+				else if (ins.replyType.compareTo("ack")==0) {//ack:
 					//look in recvacks to see how many acks we have received with identifier:
-					//insert key value model <requestingnodeid> <requestnumber>			
+					//insert key value model <requestingnodeid> <requestnumber>		
+					
 					if (acks==null) {
 						System.out.println("DEBUG:uhoh");
-						cmdComplete = true;
 						return;
 					}
 						
@@ -1386,8 +1377,11 @@ public class CommandInputThread extends Thread {
 					}
 					else if (acks.toreceive==0) {
 						//TODO: cmdComplete?
+						cmdComplete = true;
 						//do nothing
 					}
+				} else {
+					System.out.println("DEBUG:invalid reponse type, not req and not ack. Was:"+ins.replyType);
 				}
 				break;
 		}
