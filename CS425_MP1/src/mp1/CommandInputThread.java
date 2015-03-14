@@ -1008,6 +1008,7 @@ public class CommandInputThread extends Thread {
 					if (acks == null || acks.toreceive < 1) {
 						//do nothing
 					}
+					//L: if "null" occurs anywhere in the ack, then effectively, both the value and assocts are null
 					else if (acks.toreceive==1 && input.lastIndexOf("null") == -1) { //TODO can assocts be null but value be not null?
 						//if recvacks has 1 more ack to receive (R=1) and ack doesn't have "null" as value,
 						//store 0 in recvacks
@@ -1015,6 +1016,8 @@ public class CommandInputThread extends Thread {
 						node.recvacks.put(identifier, acks);
 						//print "get(<key>) = (<value>, <associatedvaluetimestamp>)"
 						//TODO replace node.sharedData with the input message????
+						//L: No, since it is eventually consistent, sharedData will either get updated when it receives
+						//L: the insert/update that this more recent assocts comes from, or else it will change on a repair
 						System.out.println("get("+key+") = ("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
 						//then print "(<value>, <associatedvaluetimestamp>)" on a new line...
 						System.out.println("("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
@@ -1123,6 +1126,8 @@ public class CommandInputThread extends Thread {
 						long prevTS = Long.parseLong(build.toString());
 						
 						//TODO replace node.sharedData with the input message????
+						//L: No, since it is eventually consistent, sharedData will either get updated when it receives
+						//L: the insert/update that this more recent assocts comes from, or else it will change on a repair
 						if (prevTS < writets) {
 							//writets is more recent
 							System.out.println("get("+key+") = ("+node.sharedData.get(key).value+", "+node.sharedData.get(key).timestamp+")");
@@ -1605,26 +1610,96 @@ public class CommandInputThread extends Thread {
 	/*
 	 * When a MessageReceiverThread receives a search message,
 	 * this method either sends a reply, processes a reply, or completes a search operation
+	 * Message form: search key <requestingnodeid> <requestnumber> <NodeId> <reqorack> <timestamp>
 	 * Updates this.cmdComplete when the necessary number of acks have been received
 	 */
 	public void respondToSearchMessage(String input) {
-		// TODO Implement
-		//SEARCH
-		//req: respond with an ack of the form
+		
+		//Extract key
+		StringBuilder builder = new StringBuilder();
+		int i = 7;
+		while (input.charAt(i) != ' ') { //move thru key
+			builder.append(input.charAt(i));
+			i++;
+		}
+		String key = builder.toString();
+		
+		//Extract identifier
+		i += 3; //move past space,reqNodeId,space
+		while (input.charAt(i) != ' ') //move past reqnum
+			i++;
+		//This format of the message represents a unique identifier for the request
+		String identifier = input.substring(0,i);
+		
+		//See if this node has key in replica
+		Datum replica = node.sharedData.get(key);
+		
+		int reqat = input.lastIndexOf("req");
+		int ackat = input.lastIndexOf("ack");
+		int reqorackat = Math.max(reqat, ackat);
+
+		
+		if (reqat != -1) { //req
+						
+			//if this node doesn't have the key in sharedData, put "null" as <myNodeId>
+			String contains = (replica == null) ? "null" : nodesinfo[myIdx].id;
+			
+			//respond with an ack of the form
 			//search key <requestingnodeid> <requestnumber> <myNodeId> ack <timestamp>
-			//if this node doesn't have the key in sharedData, put "null" as <myNodeId> (else put this node's id)
-		//ack: look in recvacks to see how many acks we have received with identifier:
-			//search key <requestingnodeid> <requestnumber>
-			//if recvacks has more than 1 more ack to receive, and this ack does not say "null"
-				//store that number decremented in recvacks, store <myNodeId> in recvacks' validacks ArrayList
-			//if recvacks has more than 1 more ack to receive, and this ack says "null"
-				//store that number decremented in recvacks
-			//if recvacks has 1 ack to receive, store 0 in recvacks and
+			String ack = new String(input.substring(0, reqorackat) + contains + " ack ");
+			ack = ack + input.substring(reqorackat + 4); //<timestamp>
+			addMessageToLeaderQueue(new MessageType(ack, System.currentTimeMillis())); //adds senttimestamp
+			
+		}
+		
+		else { //ack
+			
+			AckTracker acks = node.recvacks.get(identifier);
+			//look in recvacks to see how many acks we have received with identifier
+			
+			if (acks == null || acks.toreceive < 1) {
+				//do nothing
+			}
+			else if (acks.toreceive == 1) { //recvacks has 1 ack to receive
+				//store 0 in recvacks
+				acks.toreceive = 0;
+				node.recvacks.put(identifier, acks);
+				
 				//print out "Key exists in these replicas: "
-				//this Node's id if it has key, then print out <myNodeId> for this ack if it's not "null"
-				//then print out all the nodeids stored in recvacks' validacks ArrayList
+				System.out.print("Key "+key+" exists in these replicas: ");
+				//print this Node's id if it has key
+				if (replica != null)
+					System.out.print(nodesinfo[myIdx].id + " ");
+				
+				//print out <myNodeId> for this ack if it's not "null"
+				if (input.lastIndexOf("null") == -1)
+					System.out.print(input.substring(reqorackat-2, reqorackat-1) + " ");
+				
+				//print out all the nodeids stored in recvacks' validacks ArrayList
+				for (int idx = 0; idx<acks.validacks.size(); idx++) {
+					String ack = acks.validacks.get(idx);
+					int nodeIdat = ack.lastIndexOf("ack") - 2;
+					System.out.print(ack.substring(nodeIdat, nodeIdat+1) + " ");
+				}
+				
+				System.out.println();
+				
 				//mark cmdComplete as true
-		System.out.println("Received search message: "+input);
+				cmdComplete = true;
+			}
+			else { //recvacks has more than 1 more ack to receive
+				
+				if (input.lastIndexOf("null") == -1) //this ack does not say null
+					acks.validacks.add(input);
+				
+				acks.toreceive--;
+				node.recvacks.put(identifier, acks);
+
+			}
+
+		}
+
+//		System.out.println("Received search message: "+input);
 	}
 	
 	
@@ -1635,7 +1710,7 @@ public class CommandInputThread extends Thread {
 	 * Updates this.cmdComplete when the necessary number of acks have been received
 	 */
 	public void respondToRepairMessage(String input) {
-		// TODO Implement
+		// TODO Implement (L)
 		//REPAIR: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
 		//for every key in the message
 			//if it's not in this Node's sharedData
