@@ -7,12 +7,12 @@ public class Datum {
 	public long timestamp2; //maybe
 	
 	public Datum(String val, long ts) {
-		value = val;
+		value = new String(val);
 		timestamp = ts;
 	}
 	
 	public Datum(String val, long ts, long ts2) {
-		value = val;
+		value = new String(val);
 		timestamp = ts;
 		timestamp2 = ts2;
 	}

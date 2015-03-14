@@ -10,8 +10,13 @@ public class MessageType {
 	}
 	
 	public MessageType(String msg, Long time) {
-		this.msg = msg;
+		this.msg = new String(msg);
 		this.ts = time;
+	}
+	
+	public MessageType(MessageType msg) {
+		this.msg = new String(msg.msg);
+		this.ts = msg.ts;
 	}
 	
 	//TODO: parse any message received over a socket for its timestamp

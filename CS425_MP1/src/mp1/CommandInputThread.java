@@ -201,17 +201,23 @@ public class CommandInputThread extends Thread {
 	 * Calculates the random delay, gives message to correct MessageDelayerThread
 	 */
 	public void addMessageToNodeQueue(MessageType msg, int recvIdx) {
+		
+		MessageType tosend = new MessageType(msg); //remove all references to old object
+		
 		//Calculate random delay
-		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
-//		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" is "+randint+" milliseconds");
+		int randint = 0;
+		if (intmaxdelays[recvIdx] > 0)
+			randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
+		
+//		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" with message "+tosend.msg+" is "+randint+" milliseconds");
 				
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
-		msg.ts = new Long(Math.max(msg.ts + (long)randint, last[recvIdx].ts.longValue()));
-//		System.out.println("Adjusted receive time to "+nodesinfo[recvIdx].id+" is "+msg.ts);
+		tosend.ts = new Long(Math.max(tosend.ts + (long)randint, last[recvIdx].ts.longValue()));
+//		System.out.println("Adjusted receive time to "+nodesinfo[recvIdx].id+" with message "+tosend.msg+" is "+tosend.ts);
 			
 		try {
-			mqnodearr.get(recvIdx).put(msg);
-			last[recvIdx] = msg;
+			mqnodearr.get(recvIdx).put(tosend);
+			last[recvIdx] = new MessageType(tosend);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}

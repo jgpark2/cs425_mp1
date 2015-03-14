@@ -49,6 +49,7 @@ public class MessageReceiverThread extends Thread {
 				
 				//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 				if (input.lastIndexOf("get ") == 0) {
+//					System.out.println("Received get message "+input+", system time is "+System.currentTimeMillis());
 					node.getCommandInputThread().respondToGetMessage(input);
 				}
 				

@@ -114,7 +114,9 @@ public class MessageRouterThread extends Thread {
 		long ts = Long.parseLong(timestr);
 		
 		//Calculate random delay
-		int randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
+		int randint = 0;
+		if (intmaxdelays[recvIdx] > 0)
+			randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
 //		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" is "+randint+" milliseconds");
 		
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
@@ -124,7 +126,7 @@ public class MessageRouterThread extends Thread {
 		
 		try {
 			mqoutarr.get(recvIdx).put(tosend);
-			last[fromIdx][recvIdx] = tosend;
+			last[fromIdx][recvIdx] = new MessageType(tosend);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
