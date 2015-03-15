@@ -12,5 +12,13 @@ The MessageDelayerThread then sends the message along the socket connection to t
 
 Consistency Models Implementations
 Linearizability
+For linearizability (model 1), we simply have all messages go through the central server. The central server simply relays the received message to all nodes in FIFO order, essentially performing totally-ordered broadcasts. The nodes deliver upon receipt, which is of course after applying the channel delay respectively and in FIFO order with respect to the central server.
+The get command sends out the request to the central server which queues it for FIFO. The central server sends it back with the channel delay applied. Upon receiving its own get request, the node then sends out the ack message which the central server queues again, then broadcasts to all the nodes. For individual nodes, upon receiving the ack message the get command is now delivered and they can print out the key value pair form their data.
+The insert command sends out a request to the central server which queues it to broadcast it. The nodes will receive the insert request, at which point they will insert the key value (if the key already exists, the value is updated) to their data set. They will individually reply to the request message by sending out an ack (acknowledge) message. The update command is the same except if the key does not exist, nothing happens.
+delete
+
 Sequential Consistency
+Sequential Consistency has a similar implementation to linearizability in that most messages go through the central server for the FIFO effect. The difference arises in when "get" is requested. In sequential consistency, it is enough to simply return the caller node's own stored value immediately without communicating with the central server or any of the other nodes. Rest of the behavior is the same as the linearizability model.
+
 Inconsistency Repair for Eventual Consistency
+The incosistency repair is performed by the central server. Because all the messages go through the central server, it is able to collect the shared data changes (it will actually be the most "true" shared data). We simply implemented it such that the central server periodically sends out updates to synchronize the shared data set with all the nodes.
