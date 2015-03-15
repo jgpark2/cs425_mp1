@@ -1,24 +1,65 @@
 Laura Galbraith, galbrth2
 Jonathan Park, jgpark2
 
+
 Channel Delay Implementation
+
 For each Node object n, one MessageDelayerThread thread with a BlockingQueue
-is created for each Node object that n needs to send messages to.
-Messages that n wants to send to another particular Node are added to the
-BlockingQueue. MessageDelayerThread removes each message from the BlockingQueue
-and sleeps until the time has come equal to that message's timestamp
+is created for each Node object that n needs to send messages to (3).
+Messages that n wants to send to a particular Node are added to the
+BlockingQueue. The MessageDelayerThread removes each message from the BlockingQueue
+and sleeps until the time it should be sent, indicated by the message's timestamp
 (some random delay added to the time the message was added to the BlockingQueue).
 The MessageDelayerThread then sends the message along the socket connection to the other Node.
+When a message is sent to a Node from the CentralServer, the time the request
+occurred is appended to the message by the sending Node, read by the
+CentralServer's MessageRouterThread, then some random delay is calculated and
+added to that before handing off this message/timestamp to a
+MessageDelayerThread belonging to the CentralServer, which will sleep then send.
+
 
 Consistency Models Implementations
+
 Linearizability
-For linearizability (model 1), we simply have all messages go through the central server. The central server simply relays the received message to all nodes in FIFO order, essentially performing totally-ordered broadcasts. The nodes deliver upon receipt, which is of course after applying the channel delay respectively and in FIFO order with respect to the central server.
-The get command sends out the request to the central server which queues it for FIFO. The central server sends it back with the channel delay applied. Upon receiving its own get request, the node then sends out the ack message which the central server queues again, then broadcasts to all the nodes. For individual nodes, upon receiving the ack message the get command is now delivered and they can print out the key value pair form their data.
-The insert command sends out a request to the central server which queues it to broadcast it. The nodes will receive the insert request, at which point they will insert the key value (if the key already exists, the value is updated) to their data set. They will individually reply to the request message by sending out an ack (acknowledge) message. The update command is the same except if the key does not exist, nothing happens.
-delete
+
+For linearizability (model 1), we simply have all request messages go through the CentralServer,
+which implements totally-ordered broadcasts as a leader. The CentralServer receives the messages
+in a MessageRelayThread, which puts them in the totally-ordered FIFO queue for
+MessageRouterThread to process. The MessageRouterThread then routes the received message to all
+relevant Nodes. The Nodes deliver upon receipt in MessageReceiverThread, which is of course after
+the CentralServer applies the channel delay with respect to the receiving Node's maximum delay,
+in the MessageDelayerThread corresponding to the receiving Node.
+
+The get command sends out the request to the CentralServer which queues it for FIFO. The
+CentralServer sends it back with the channel delay applied. Upon receiving its own get
+request, the Node is then free to print out the key/value pair form their replica of the data,
+which happens in the CommandInputThread.
+
+The insert command sends out a request to the CentralServer which queues it to broadcast it.
+The Nodes will receive the insert request, at which point they will insert the key/value
+(if the key already exists, the value is updated) to their data set. They will individually
+reply to the request message by sending an ack (acknowledge) message to the CentralServer.
+The update command is the same except, if the key does not exist, nothing happens.
+
 
 Sequential Consistency
-Sequential Consistency has a similar implementation to linearizability in that most messages go through the central server for the FIFO effect. The difference arises in when "get" is requested. In sequential consistency, it is enough to simply return the caller node's own stored value immediately without communicating with the central server or any of the other nodes. Rest of the behavior is the same as the linearizability model.
+
+Sequential consistency has a similar implementation to linearizability in all write messages
+(insert, update) go through the CentralServer to be totally-ordered broadcasts. The difference
+arises in when "get" is requested. In sequential consistency, it is enough to simply return the
+requesting Node's own stored value immediately without communicating with the CentralServer or
+any of the other Nodes, which occurs in CommandInputThread. The rest of the behavior is the
+same as the linearizability model.
+
 
 Inconsistency Repair for Eventual Consistency
-The incosistency repair is performed by the central server. Because all the messages go through the central server, it is able to collect the shared data changes (it will actually be the most "true" shared data). We simply implemented it such that the central server periodically sends out updates to synchronize the shared data set with all the nodes.
+
+The inconsistency repair is performed by the CentralServer. The RepairThread sends out a periodic
+message containing the last-writer-win-rule-determined most recent key/values,
+which is subject to channel delays. When an eventual consistency insert/update occurs, a special
+"writeglobal"-type message is sent to the CentralServer to have it update the
+globalData key/value replica. Because all delete messages also go through the CentralServer,
+it is able to collect the shared data changes in globalData (it will actually be the most
+"true" shared data with the last-writer-win rule). A Node, upon receiving a
+repair message, updates its own sharedData replica if the repair message
+contains more recent writes.
