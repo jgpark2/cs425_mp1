@@ -16,39 +16,50 @@ import java.util.concurrent.ArrayBlockingQueue;
  * CommandInputThread: 1 per Node object
  * Takes input from System.in or command file and sends that request
  * to the correct communication channel
+ * Implements how messages are formed and responded to (forms and processes acks)
  */
 public class CommandInputThread extends Thread {
 	
+	//The Node that this thread belongs to
 	private Node node;
+	
+	//Structures to hold information from config file
 	private NodeInfo [] nodesinfo;
 	private NodeInfo leaderInfo;
-	private int myIdx; //index into NodeInfo array
+	private int myIdx; //index into NodeInfo array for this Node
 	
 	private BufferedReader cmdin; //this can be from FileReader OR System.in	
 	
+	//Tools to implement channel delay
 	private Random r;
 	//These are calculated once and saved to be more efficient
 	private Double [] millismaxdelays;
 	private int [] intmaxdelays;
 	
-	//because of Java, this can't be a generic array
-	private ArrayList < ArrayBlockingQueue<MessageType> > mqnodearr;
-	private ArrayBlockingQueue<String> mqleader;
+	//Queues that implement FIFO channels
+	private ArrayList < ArrayBlockingQueue<MessageType> > mqnodearr; //peer channels
+	private ArrayBlockingQueue<String> mqleader; //channel to central leader
 	private int mqmax = 1023;
+	
+	//Keeps track of the last message sent along a peer channel
+	//to implement the channel delay calculation with the last timestamp
 	private MessageType [] last;
 	
 	//Indicates whether the current command is finished executing or not
+	//Makes sure next operation does not have its invocation before the
+	//previous operation has its response
 	public volatile boolean cmdComplete = false;
     
 
 	public CommandInputThread(Node node, BufferedReader inputstream) {
+		//Get Node information
 		this.node = node;
     	myIdx = node.myIdx;
     	nodesinfo = node.getNodesInfo();
     	leaderInfo = node.leaderInfo;
     	
+    	//Initialization
 		cmdin = inputstream;
-		
 		//Translate delay into necessary types
 		millismaxdelays = new Double[4];
 		intmaxdelays = new int[4];
@@ -67,6 +78,12 @@ public class CommandInputThread extends Thread {
 		new Thread(this, "CommandInput").start();
 	}
 
+	
+	/*
+	 * This thread's main purpose is to wait for a new operation to be
+	 * requested, and then to wait until all the necessary acks have been
+	 * received to complete that operation
+	 */
 	public void run() {
 
 		//Create socket connections
@@ -107,12 +124,11 @@ public class CommandInputThread extends Thread {
 		String cmd = "";
 		
         try {
-			while ((cmd = cmdin.readLine()) != null) { //no longer support exit, just read until end of input file
+			while ((cmd = cmdin.readLine()) != null) { //read until end of input file
 
-				//Discard any old references and make a new MT object
+				//Discard any old references and make a new message
 				MessageType msg = new MessageType(cmd, System.currentTimeMillis());
 				cmdComplete = false;
-//				System.out.println("Beginning to execute command "+cmd);
 				
 				//parse and send along message input
 				int error = parseForIncorrectFormat(msg);
@@ -155,9 +171,9 @@ public class CommandInputThread extends Thread {
 					}
 				}
 				
-				//do not restart the loop until the command is finished being processed
+				//do not restart the loop until the operation has its response
 				while (!cmdComplete) {}
-//				System.out.println("Finished executing command "+cmd+", and cmdComplete is "+cmdComplete);
+
 			}
 		} catch (IOException e) {
 			System.out.println("Failed to get command");
@@ -165,30 +181,18 @@ public class CommandInputThread extends Thread {
 			return;
 		}
         
-//        System.out.println("CommandInputThread reached end of file, exiting");
         try {
-			cmdin.close();
+			cmdin.close(); //close the command input (file) after it is finished
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-	
-
-	public void addMessageToAllQueues(MessageType msg) {
-		try {
-        	for (Iterator< ArrayBlockingQueue<MessageType> > it = mqnodearr.iterator(); it.hasNext();) {
-        		it.next().put(msg);
-        	}
-        	mqleader.put(msg.msg);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
 	}
 	
 	
 	/*
 	 * Appends the timestamp of the message to the end of the message
 	 * Adds message string to MessageSenderThread queue to be sent
+	 * to the central leader
 	 */
 	public void addMessageToLeaderQueue(MessageType msg) {
 		String tosend = msg.msg + " " + msg.ts.longValue();
@@ -201,7 +205,9 @@ public class CommandInputThread extends Thread {
 	
 	
 	/*
-	 * Calculates the random delay, gives message to correct MessageDelayerThread
+	 * Calculates the random delay, gives message to correct Node peer channel
+	 * recvIdx represents an index into the NodeInfo array of the Node who
+	 * will receive this message
 	 */
 	public void addMessageToNodeQueue(MessageType msg, int recvIdx) {
 		
@@ -211,12 +217,10 @@ public class CommandInputThread extends Thread {
 		int randint = 0;
 		if (intmaxdelays[recvIdx] > 0)
 			randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
-		
-//		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" with message "+tosend.msg+" is "+randint+" milliseconds");
 				
+		//last[recvIdx] is the last such message to be send along the correct channel
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
 		tosend.ts = new Long(Math.max(tosend.ts + (long)randint, last[recvIdx].ts.longValue()));
-//		System.out.println("Adjusted receive time to "+nodesinfo[recvIdx].id+" with message "+tosend.msg+" is "+tosend.ts);
 			
 		try {
 			mqnodearr.get(recvIdx).put(tosend);
@@ -229,11 +233,10 @@ public class CommandInputThread extends Thread {
 	
 	/*
 	 * Take command and check number of arguments
-	 * Returns an integer indicating which type of message it is
+	 * Returns an integer indicating which type of message it is or -1 on error
 	 */
 	private int parseForIncorrectFormat(MessageType msg) {
 		
-//		System.out.println("Entering parseForIncorrectFormat, msg is "+msg.msg);
 		int type = -1;
 		String adjustedmsg = new String(msg.msg);
 		StringBuilder builder = new StringBuilder();
@@ -390,7 +393,7 @@ public class CommandInputThread extends Thread {
 			type = 6;
 		}
 		
-		//search key
+		//search key utility tool
 		else if (msg.msg.lastIndexOf("search ") == 0) {
 			boolean hasKey = false;
 			builder.append("search ");
@@ -411,7 +414,6 @@ public class CommandInputThread extends Thread {
 		}
 		
 		msg.msg = adjustedmsg;
-//		System.out.println("Exiting parseForIncorrectFormat, msg is "+msg.msg);
 		return type;
 	}
 	
@@ -427,9 +429,7 @@ public class CommandInputThread extends Thread {
 	 */
 	private void parseDelete(MessageType msg) {
 		//We want to send this out even if this Node has no replica of the key
-
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
-//		System.out.println("Marking cmdComplete as true in parseDelete");
 		this.cmdComplete = true;
 	}
 	
@@ -442,6 +442,7 @@ public class CommandInputThread extends Thread {
 	 * final format: get key model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseGet(MessageType msg) {
+		
 		//Extract model out of msg
 		String modelstr = msg.msg.substring(msg.msg.length()-1);
 		int model = Integer.parseInt(modelstr);
@@ -473,7 +474,7 @@ public class CommandInputThread extends Thread {
 			}
 			
 			case 3: {
-				//eventual consistency, R=1: read 1 replica (ours)
+				//eventual consistency, R=1: read 1 replica (ours if we have it)
 				
 				//Extract key out of msg
 				String key = msg.msg.substring(4, msg.msg.length()-2);
@@ -519,21 +520,23 @@ public class CommandInputThread extends Thread {
 				if (value == null) { //wait for two acks
 					node.recvacks.put(msg.msg, new AckTracker(2));
 				}
-				else { //our replica contains key, store its value in recvacks, wait for 1 ack
+				else { //our replica contains key
 					AckTracker ours = new AckTracker(1); //wait for 1 ack
+					
 					//add our key/value as an ack message of form
 					//get key model <reqNodeId> <reqcnt> <value> <associatedvaluetimestamp> ack <timestamp>
 					String ourack = new String(msg.msg); //get key model <reqNodeId> <reqcnt>
 					ourack = ourack + " " + value.value + " " + value.timestamp + " ack "+msg.ts.longValue();
-					ours.validacks.add(ourack);
 					
+					ours.validacks.add(ourack);
 					node.recvacks.put(msg.msg, ours);
 				}
 				
+				//Send get request to all other Nodes and wait for acks
 				msg.msg = msg.msg + " " + "req" + " " + msg.ts.longValue();
 				for (int i = 0; i< 4; i++) {
 					if (i != myIdx)
-						addMessageToNodeQueue(msg, i);
+						addMessageToNodeQueue(msg, i); //this method adds no timestamp
 				}
 				
 				break;
@@ -541,7 +544,7 @@ public class CommandInputThread extends Thread {
 			
 			default: {
 				System.out.println("Client: Message was not correctly fomatted; try again");
-				this.cmdComplete = true;
+				cmdComplete = true;
 				return;
 			}
 		}
@@ -557,6 +560,7 @@ public class CommandInputThread extends Thread {
 	 * final format: insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseInsert(MessageType msg) {
+		
 		node.reqcnt++;
 		
 		//Extract model out of msg
@@ -582,24 +586,18 @@ public class CommandInputThread extends Thread {
 		String value = builder.toString();
 		
 		switch (model) {
-			case 1: {
-				//linearizability: send to CentralServer, wait for 4 acks to be received
-				//This format of the message represents a unique identifier for the request
-				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
-				node.recvacks.put(msg.msg, new AckTracker(4));
-				msg.msg = msg.msg + " " + "req";
-				addMessageToLeaderQueue(msg); //this method adds the timestamp
-				return;
-			}
-			
+			case 1: //linearizability and sequential consistency behave the same here
+				//send to CentralServer, wait for 4 acks to be received
 			case 2: {
-				//sequential consistency: send to CentralServer, wait for 4 acks to be received
+				
 				//This format of the message represents a unique identifier for the request
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
+				
 				node.recvacks.put(msg.msg, new AckTracker(4));
 				msg.msg = msg.msg + " " + "req";
 				addMessageToLeaderQueue(msg); //this method adds the timestamp
 				return;
+				
 			}
 			
 			case 3: {
@@ -620,7 +618,7 @@ public class CommandInputThread extends Thread {
 				}
 				
 				System.out.println("Client: Inserted key "+key);
-				this.cmdComplete = true;
+				cmdComplete = true;
 				break;
 			}
 			
@@ -646,7 +644,7 @@ public class CommandInputThread extends Thread {
 			
 			default: {
 				System.out.println("Client: Message was not correctly fomatted in parseInsert; try again");
-				this.cmdComplete = true;
+				cmdComplete = true;
 				return;
 			}
 		}
@@ -656,7 +654,6 @@ public class CommandInputThread extends Thread {
 		MessageType writeglobal = new MessageType("", msg.ts);
 		writeglobal.msg = "writeglobal "+key+" "+value;
 		addMessageToLeaderQueue(writeglobal);
-		
 	}
 
 
@@ -668,6 +665,7 @@ public class CommandInputThread extends Thread {
 	 * final format: update key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseUpdate(MessageType msg) {
+		
 		//Extract model out of msg
 		String modelstr = msg.msg.substring(msg.msg.length()-1);
 		int model = Integer.parseInt(modelstr);
@@ -710,22 +708,22 @@ public class CommandInputThread extends Thread {
 				msg.msg = msg.msg + " " + nodesinfo[myIdx].id + " " + node.reqcnt;
 				
 				if (node.sharedData.get(key) == null) { //not yet updated in any replicas, wait for 1 ack
-
 					node.recvacks.put(msg.msg, new AckTracker(1));
-					
 				}
 				else { //already written in 1 replica, wait for no acks
+					
 					Datum toinsert = new Datum(value, msg.ts.longValue());
 					Datum old = node.sharedData.put(key, toinsert);
 					System.out.println("Server: Key "+key+" changed from "+old.value+" to "+value);
 					
 					node.recvacks.put(msg.msg, new AckTracker(0));
 					
+					//This insert should be written in globalData for eventual consistency
 					MessageType writeglobal = new MessageType("", msg.ts);
 					writeglobal.msg = "writeglobal "+key+" "+value;
 					addMessageToLeaderQueue(writeglobal); //this method adds the timestamp
 					
-					this.cmdComplete = true;
+					cmdComplete = true;
 				}
 				
 				//We need to tell them all to write, regardless of how many acks we need
@@ -768,7 +766,7 @@ public class CommandInputThread extends Thread {
 					
 			default: {
 				System.out.println("Client: Message was not correctly fomatted; try again");
-				this.cmdComplete = true;
+				cmdComplete = true;
 				return;
 			}
 		}
@@ -776,6 +774,7 @@ public class CommandInputThread extends Thread {
 		//Both linearizability and sequential consistency run this:
 		if (node.sharedData.get(key) == null) { //key does not exist in system
 			System.out.println("Client: Key "+key+" does not exist in system, attempted update failed");
+			cmdComplete = true;
 			return;
 		}
 		

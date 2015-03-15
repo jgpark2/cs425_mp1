@@ -1,8 +1,17 @@
 package mp1;
 
+/*
+ * This simple class holds information about a message before it is compressed
+ * into just a string to be sent along a communication channel
+ */
 public class MessageType {
-	public String msg = "";
-	public Long ts = new Long(0); //time to send at
+	
+	//The message string that will be sent along a communication channel
+	public String msg;
+	
+	//The time this message was received; becomes the time to send the
+	//message at when calculating a random channel delay
+	public Long ts;
 	
 	public MessageType() {
 		msg = "";

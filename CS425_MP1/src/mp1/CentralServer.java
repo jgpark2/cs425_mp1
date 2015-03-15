@@ -16,19 +16,31 @@ import java.util.concurrent.ConcurrentHashMap;
  * Holds 1 MessageRouterThread
  *       4 MessageRelayThread (1 receiving from every node)
  *       4 MessageDelayerThread (1 sending to every node)
+ *       1 RepairThread (sleeps and sends repair message)
+ * This class spawns threads that send periodic inconsistency repair messages for
+ * eventual consistency models, supports the search utility tool, and
+ * implements totally-ordered broadcast for the linearizability and sequential
+ * consistency models
  */
 public class CentralServer {
 	
+	//Structures to hold information from config file
 	private NodeInfo[] nodesinfo;
 	public NodeInfo leaderInfo;
 
+	//The socket that the CentralServer listens on
 	private ServerSocket server;
+	
+	//Queue that implements total-ordering (all messages get queued)
 	private ArrayBlockingQueue<String> mqin;
 	private int mqmax = 1023;
 	
 	private MessageRouterThread router; //this will create the MessageDelayerThreads on Socket connection
 	private MessageRelayThread [] receivers; //spawned from CentralServer
 	private MessageDelayerThread [] senders; //spawned from MessageRouterThread
+	
+	//Implements last-writer-win rule, only gets written to for eventual consistency
+	//The periodic repair messages contain information from this
 	public ConcurrentHashMap<String, Datum> globalData;
 
 	
@@ -46,6 +58,10 @@ public class CentralServer {
 	}
 
 
+	/*
+	 * Reads in the config file (should sit in the directory the code runs from)
+	 * and returns -1 if any of the formatting is incorrect
+	 */
 	private int parseConfig() {
 		
 		nodesinfo = new NodeInfo[4];
@@ -139,15 +155,18 @@ public class CentralServer {
 	}
 
 
+	/*
+	 * CentralServer spawns necessary threads after config has been read
+	 */
 	private void start() {
 		
+		//Initialization of class member variables
 		receivers = new MessageRelayThread[4];
         senders = new MessageDelayerThread[4];
         for (int i=0; i<4; i++) {
         	receivers[i] = null;
         	senders[i] = null;
         }
-        
         mqin = new ArrayBlockingQueue<String>(mqmax);
         globalData = new ConcurrentHashMap<String, Datum>();
 
@@ -168,14 +187,14 @@ public class CentralServer {
         
         Socket socket;
 		int count = 0;
-
+		//Connect to all 4 Nodes (A,B,C,D)
         while (count < 4) {
         	
             try{
             	socket = server.accept();
             	BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             	String input = "";
-    			while ((input = in.readLine())==null) {} //get recvIdx from MessageSenderThread
+    			while ((input = in.readLine())==null) {} //get Node info (index into NodeInfo array)
     			int idx = Integer.parseInt(input);
     			setReceivingThreadIndex(idx, new MessageRelayThread(this, socket, in, mqin, idx));
     			
@@ -187,7 +206,8 @@ public class CentralServer {
             
         }
         
-        new RepairThread(this); //No one needs to keep track of this thread
+        //Spawn the periodic inconsistency message repair thread
+        new RepairThread(this);
 	}
 	
 	
