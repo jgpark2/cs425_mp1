@@ -8,17 +8,21 @@ import java.util.Date;
 
 /*
  * MessageReceiverThread: 3 per Node object
- * (or 1 per Node object with CentralServer)
  * Receives messages from a socket connection and processes them
  */
 public class MessageReceiverThread extends Thread {
 	
+	//The Node that this thread belongs to
 	private Node node;
+	
+	//Structures to hold information from config file
 	private NodeInfo [] nodesinfo;
 	private int myIdx; //index into NodeInfo array
 	
+	//Node id of the node that this thread is receiving messages from
 	private String recvId;
 	
+	//Stream from socket connection
 	private BufferedReader ins;
 	
 
@@ -34,10 +38,13 @@ public class MessageReceiverThread extends Thread {
 	}
 	
 
+	/*
+	 * This thread's main purpose is to wait until a message is received
+	 * over the socket connection, then process it
+	 */
 	@Override
 	public void run() {
 		
-		//With CentralServer
 		String input = "";
 		try {
 			//while CentralServer or a Node keeps writing to its output stream...

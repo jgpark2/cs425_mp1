@@ -1,23 +1,21 @@
 package mp1;
 
+/*
+ * This simple class represents the value in our key-value store
+ */
 public class Datum {
 
+	//The value that was assigned in a write operation
 	public String value;
+	
+	//The timestamp of the invocation of the operation that
+	//the value was assigned in
 	public long timestamp;
-	public long timestamp2; //maybe
+
 	
 	public Datum(String val, long ts) {
 		value = new String(val);
 		timestamp = ts;
 	}
-	
-	public Datum(String val, long ts, long ts2) {
-		value = new String(val);
-		timestamp = ts;
-		timestamp2 = ts2;
-	}
-	
-	public void addAckTimestamp(long ts2) {
-		timestamp2 = ts2;
-	}
+
 }

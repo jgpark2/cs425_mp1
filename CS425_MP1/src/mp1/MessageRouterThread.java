@@ -15,11 +15,19 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class MessageRouterThread extends Thread {
 	
+	//Leader object that spawned this thread
 	private CentralServer centralServer;
+	
+	//Structure to hold information from config file
 	private NodeInfo [] nodesinfo;
 
+	//Totally-ordered message queue
 	private ArrayBlockingQueue<String> mqin;
+	
+	//FIFO channel queues going out to the Nodes
 	public ArrayList< ArrayBlockingQueue<MessageType> > mqoutarr;
+	
+	//Tools to implement channel delay
 	public Random r;
 	//These are calculated once and saved to be more efficient
 	private Double [] millismaxdelays;
@@ -31,6 +39,8 @@ public class MessageRouterThread extends Thread {
 
 	public MessageRouterThread(CentralServer centralServer,
 			ArrayBlockingQueue<String> mqin, int mqmax) {
+		
+		//Initialization
 		this.centralServer = centralServer;
 		nodesinfo = centralServer.getNodesInfo();
 		this.mqin = mqin;
@@ -41,6 +51,7 @@ public class MessageRouterThread extends Thread {
 		last = new MessageType[4][4];
 		mqoutarr = new ArrayList< ArrayBlockingQueue<MessageType> >(4);
 		
+		//Translate into necessary formats only once to be efficient
 		for (int i=0; i<4; i++) {
 			millismaxdelays[i] = new Double(nodesinfo[i].max_delay*1000.0);
 			intmaxdelays[i] = millismaxdelays[i].intValue();
@@ -53,6 +64,11 @@ public class MessageRouterThread extends Thread {
 	}
 	
 	
+	/*
+	 * This thread's main purpose is to get messages from the totally-ordered
+	 * queue coming from all nodes trying to do broadcasts, and route them to
+	 * the appropriate receiving node(s)
+	 */
 	public void run() {
 		
 		//Initialize sending connections with nodes

@@ -9,20 +9,24 @@ import java.util.concurrent.ArrayBlockingQueue;
  * MessageSenderThread: 1 per Node object
  * Takes input from the blocking queue,
  * and sends that request to the CentralServer
+ * Since the CentralServer is not the final destination of the message,
+ * no delay is applied until it will reach its final destination
  */
 public class MessageSenderThread extends Thread {
 
-	private int myIdx;
+	private int myIdx; //index into NodeInfo array for this Node
 	
+	//Socket connection
 	private Socket socket;
-	private ArrayBlockingQueue<String> mqout;
-	
 	private PrintWriter outs;
+	
+	//Queue to take messages from and send
+	private ArrayBlockingQueue<String> mqout;
 	
 	
 	public MessageSenderThread(Node node, ArrayBlockingQueue<String> mq,
 			Socket socket) {
-		node.getNodesInfo();
+		
 		myIdx = node.myIdx;
 		this.socket = socket;
 		mqout = mq;
@@ -31,8 +35,14 @@ public class MessageSenderThread extends Thread {
 	}
 
 
+	/*
+	 * This thread's main purpose is to wait for any message to arrive on the
+	 * FIFO channel queue (inserted into either by CommandInputThread),
+	 * then deliver it.
+	 */
 	public void run() {
 		
+		//Initialization
 		try {
 			outs = new PrintWriter(socket.getOutputStream(), true);
 		} catch (IOException e) {

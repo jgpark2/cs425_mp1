@@ -112,7 +112,7 @@ public class CommandInputThread extends Thread {
 				leaderconn = new Socket(leaderInfo.ip, leaderInfo.port);
 				System.out.print("Server: Now connected to "+leaderInfo.ip+":" +leaderInfo.port);
 				System.out.println(" (leader)");
-				node.setToLeaderSendingThread(new MessageSenderThread(node, mqleader, leaderconn));
+				new MessageSenderThread(node, mqleader, leaderconn);
 			} catch (Exception e) {
 				leaderconn = null;
 			}
@@ -793,28 +793,32 @@ public class CommandInputThread extends Thread {
 	 * and sends the message to the specified Node
 	 * This method assumes that parseForIncorrectFormat has already been called
 	 */
-	private void parseCommandForMessage(MessageType cmd) { //"Send Hello B"
+	private void parseCommandForMessage(MessageType cmd) {
+		
 		int len = cmd.msg.length();
 		
+		//Check for errors and determine which Node to send to
 		int recvIdx = parseCommandForRecvIdx(cmd.msg);
 		if (recvIdx < 0) {
 			System.out.println("Client: Message was not correctly fomatted; try again");
-			this.cmdComplete = true;
+			cmdComplete = true;
 			return;
 		}
 		
+		//Remove the message from the command
 		StringWriter writer = new StringWriter();
 		for (int i=5; i<(len-2); i++)
 			writer.append(cmd.msg.charAt(i));
 		cmd.msg = writer.toString();
 		
+		//Send along peer channel
 		addMessageToNodeQueue(cmd, recvIdx);
 		System.out.print("Client: Sent \""+cmd.msg+"\" to "+nodesinfo[recvIdx].id+", system time is ");
 		SimpleDateFormat format = new SimpleDateFormat("H:mm:ss.SSS");
 		Date curdate = new Date();
 		System.out.println(format.format(curdate));
 
-		this.cmdComplete = true;
+		cmdComplete = true;
 	}
 	
 	
@@ -846,6 +850,7 @@ public class CommandInputThread extends Thread {
 			return -1;
 		}
 
+		//No messages are sent to this Node itself
 		if (id.compareToIgnoreCase(nodesinfo[myIdx].id) == 0) {
 			return -1;
 		}
@@ -863,13 +868,14 @@ public class CommandInputThread extends Thread {
 		Set<String> keyset = node.sharedData.keySet();
 		System.out.println("Key-value pairs stored in this replica:");
 		Iterator<String> it = keyset.iterator();
+		//Print out all the key-value pairs
 		while (it.hasNext()) {
 			String key = it.next();
 			Datum value = node.sharedData.get(key);
 			System.out.println(key + ": " + value.value);
 		}
 
-		this.cmdComplete = true;
+		cmdComplete = true;
 	}
 
 
@@ -886,6 +892,8 @@ public class CommandInputThread extends Thread {
 		Double tmillis = new Double(tdouble.doubleValue()*1000.0);
 		long tosleep = tmillis.longValue();
 		
+		//This thread can sleep, because this thread shouldn't start the next
+		//operation until the delay has been applied
 		if (tosleep > 0) {
 			try {
 				Thread.sleep(tosleep);
@@ -894,7 +902,7 @@ public class CommandInputThread extends Thread {
 			}
 		}
 
-		this.cmdComplete = true;
+		cmdComplete = true;
 	}
 
 
@@ -905,6 +913,7 @@ public class CommandInputThread extends Thread {
 	 * final format: search key <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 	 */
 	private void parseSearch(MessageType msg) {
+		
 		node.reqcnt++;
 		
 		//This format of the message represents a unique identifier for the request
@@ -917,6 +926,11 @@ public class CommandInputThread extends Thread {
 		addMessageToLeaderQueue(msg); //this method adds the timestamp
 	}
 	
+	
+	/*
+	 * This is a helper method to extract the timestamp associated with a
+	 * write operation out of a get ack message
+	 */
 	public String helperParseGetAckTS(String input, AckTracker acks) {
 
 		//Extract associatedvaluetimestamp
@@ -932,6 +946,11 @@ public class CommandInputThread extends Thread {
 		return ret;
 	}
 	
+	
+	/*
+	 * This is a helper method to extract the value of a
+	 * write operation out of a get ack message
+	 */
 	public String helperParseGetAckVal(String input){
 		//Extract the 'value' suggested by this previously received ack msg
 		int i = 4; //"get "
@@ -999,9 +1018,11 @@ public class CommandInputThread extends Thread {
 		int reqat = input.lastIndexOf("req");
 		int ackat = input.lastIndexOf("ack");
 		
-		String curMsgVal = "USHUDNOTBESEEINGTHISTXT";
-		String curMsgAssocTS = "USHUDNOTBESEEINGTHISTXT";
+		String curMsgVal = "";
+		String curMsgAssocTS = "";
+		
 		if(ackat!=-1) { //if ack get message
+			
 			//value (after req num, behind assocTS string)
 			i++; //skip the space
 			builder = new StringBuilder();
@@ -1026,9 +1047,8 @@ public class CommandInputThread extends Thread {
 		
 		AckTracker acks = node.recvacks.get(identifier);
 		
-		//GET
 		switch (model) {
-			case 1:	//linearizability: (the request only gets sent back to the requestingNode)
+			case 1: {	//linearizability: (the request only gets sent back to the requestingNode)
 				if (reqat != -1) { //req
 					//print out "get(<key>) = <value>" from sharedData
 					if (node.sharedData.get(key)==null)
@@ -1036,15 +1056,18 @@ public class CommandInputThread extends Thread {
 					else
 						System.out.println("Client: get("+key+") = "+node.sharedData.get(key).value);
 					
-					cmdComplete=true;
+					cmdComplete = true;
 				}
+				
 				//ack: not applicable, see linearizable totally-ordered broadcast algorithm
 				break;
+			}
 			
 			case 2: //sequential consistency: not applicable, requesting node just prints out its own value
 				break;
 			
-			case 3: //eventual consistency R=1:
+			case 3: { //eventual consistency R=1
+
 				if(reqat!=-1) { //req
 					Datum getRequest = node.sharedData.get(key);
 					
@@ -1056,7 +1079,7 @@ public class CommandInputThread extends Thread {
 						val = "null";
 						assocTS = 0;
 					}
-					else{
+					else {
 						val = getRequest.value;
 						assocTS = getRequest.timestamp;
 					}
@@ -1101,11 +1124,12 @@ public class CommandInputThread extends Thread {
 					}
 					
 					else if (acks.toreceive==1 && input.lastIndexOf("null") != -1) {
+						
 						//if recvacks has 1 more ack to receive (R=1) and ack has "null" as value,
 						//store 1 more null ack received in recvacks' nullacks ArrayList
 						acks.nullacks.add(input);
 						
-						if(acks.nullacks.size()>=3){
+						if (acks.nullacks.size() >= 3) {
 							//if 3 such null acks have been received now (no one else could find the key)
 							//print "get(<key>) = (NO KEY FOUND)"
 							System.out.println("Client: get("+key+") = (NO KEY FOUND)");
@@ -1116,13 +1140,12 @@ public class CommandInputThread extends Thread {
 						}
 
 					}
-					else {
-						//yay						
-					}
+					
 				}
 				break;
+			}
 				
-			case 4:	//eventual consistency R=2:
+			case 4: { //eventual consistency R=2:
 				
 				//req: same as req for eventual consistency R=1
 				if (reqat!=-1) { //req
@@ -1257,10 +1280,16 @@ public class CommandInputThread extends Thread {
 					
 				}
 				
+			}
+			
 		}
-
+		
 	}
 	
+	
+	/*
+	 * Helper to parse a received message into its fields
+	 */
 	public ReceivedInputElements helperMotherOfParse(String input){
 		ReceivedInputElements ret = new ReceivedInputElements();
 
@@ -1282,13 +1311,15 @@ public class CommandInputThread extends Thread {
 		
 		return ret;
 	}
+	
+	
 	/*
 	 * When a MessageReceiverThread receives an insert message,
 	 * this method either sends a reply, completes an insert operation, or does nothing
 	 * Updates this.cmdComplete when the necessary number of acks have been received
 	 */
 	public void respondToInsertMessage(String input) {
-		//---------------INSERT MESSAGE RESPONSE------------------//
+
 		//input (req) : insert key value model <reqnodeid> <req#> req <timestamp>
 		//input (ack) : insert key value model <reqnodeid> <req#> ack <origTS> <ackSentTS>
 		
@@ -1296,11 +1327,11 @@ public class CommandInputThread extends Thread {
 		
 		AckTracker acks = node.recvacks.get(ins.identifier);
 		
-		//INSERT
 		switch (Integer.parseInt(ins.model)) {
-			case 1: //linearizability:
+			case 1: //linearizability: behaves same as sequential consistency
 
-			case 2: //sequential consistency: same as linearizability; thus inapplicable
+			case 2: { //sequential consistency
+				
 				if (ins.replyType.compareTo("req")==0) {
 					//insert the key and value and attached timestamp into sharedData
 					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
@@ -1332,8 +1363,10 @@ public class CommandInputThread extends Thread {
 
 				}
 				break;
+			}
 			
-			case 3: //eventual consistency R=1:
+			case 3: { //eventual consistency W=1
+				
 				if (ins.replyType.compareTo("req")==0) {
 					//insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
 					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
@@ -1341,14 +1374,14 @@ public class CommandInputThread extends Thread {
 					
 					//an ack is unnecessary because the requester only checked 1 insert (itself)
 				}
-				else { //ack: not applicable, see line above
-					//insert the key and value and attached timestamp into sharedData
-				}
+
 				break;
+			}
 				
-			case 4:	//eventual consistency R=2:
+			case 4: { //eventual consistency W=2
 				
-				if (ins.replyType.compareTo("req")==0) { //req:
+				if (ins.replyType.compareTo("req")==0) { //req
+					
 					//insert the key and value and attached timestamp into sharedData, print "Inserted key <key>"
 					node.sharedData.put(ins.key, new Datum(ins.key_value, Long.parseLong(ins.timestamp)));
 					System.out.println("Server: Inserted key "+ins.key);
@@ -1362,14 +1395,12 @@ public class CommandInputThread extends Thread {
 					addMessageToNodeQueue(new MessageType(ackMsg+" "+ts, ts), node.getIndexFromId(ins.reqNodeId));
 				}
 				
-				else if (ins.replyType.compareTo("ack")==0) {//ack:
+				else if (ins.replyType.compareTo("ack")==0) { //ack
 					
 					//look in recvacks to see how many acks we have received with identifier:
 					//insert key value model <requestingnodeid> <requestnumber>		
-					if (acks==null) {
-						System.out.println("DEBUG:uhoh");
+					if (acks==null)
 						return;
-					}
 						
 					//if recvacks has 1 more ack to receive, store 0 in recvacks
 					if(acks.toreceive==1) {
@@ -1381,11 +1412,13 @@ public class CommandInputThread extends Thread {
 					else if (acks.toreceive==0) {
 						//do nothing
 					}
-				} else {
-					System.out.println("DEBUG:invalid reponse type, not req and not ack. Was:"+ins.replyType);
 				}
+				
 				break;
+			}
+			
 		}
+		
 	}
 	
 	
@@ -1774,6 +1807,7 @@ public class CommandInputThread extends Thread {
 		
 		
 		if (reqat != -1) { //req
+			
 			//insert this into sharedData, then print
 			//"Specially inserted <key> for eventual consistency update"
 			node.sharedData.put(key, new Datum(value,writets));
@@ -1903,8 +1937,6 @@ public class CommandInputThread extends Thread {
 	 * this method makes sure this Node's sharedData is up-to-date
 	 * with the most recent write in the system
 	 * Message form: repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ...
-	 * This is one of the few/only messages without a <senttimestamp> field at the end of it
-	 *      so that when we reach the end of the keys, we know
 	 */
 	public void respondToRepairMessage(String input) {
 

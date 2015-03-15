@@ -8,11 +8,13 @@ import java.util.Set;
  * Sends a periodic repair message to all Nodes to make the inconsistency repair
  * Periodic message is of form:
  * "repair <key> <value> <associatedtimestamp> <key> <value> <associatedtimestamp> ... "
- * This message is then given to
+ * This message is then given to a Node to update its key-value store replica
  */
 public class RepairThread extends Thread {
 	
+	//CentralServer that spawned this thread
 	private CentralServer centralServer;
+	//MessageRouterThread of the CentralServer
 	private MessageRouterThread router;
 
 	
@@ -24,6 +26,10 @@ public class RepairThread extends Thread {
 	}
 	
 	
+	/*
+	 * This thread's main purpose is to sleep for some length of time, then
+	 * send a repair message to all Nodes, repeatedly
+	 */
 	public void run() {
 		
 		while (true) {
@@ -50,7 +56,6 @@ public class RepairThread extends Thread {
 
 			//This is subject to delays (Piazza @277)
 			for (int i=0; i<4; i++) {
-				//router.calculateDelayAndAddToQueue(i, 0, msg);
 				
 				//Calculate random delay
 				int randint = 0;

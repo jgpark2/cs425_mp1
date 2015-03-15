@@ -18,25 +18,35 @@ import java.util.concurrent.ConcurrentHashMap;
  *       4 MessageReceiverThread (3 from Nodes, 1 from CentralServer)
  *       3 MessageDelayerThread (3 to Nodes)
  *       1 MessageSenderThread (1 to CentralServer)
+ * This class spawns threads that take operation commands and execute them
+ * and threads that send and receive over socket connections with
+ * other Nodes or the central leader
  */
 public class Node {
 
+	//Structures to hold information from config file
 	private NodeInfo[] nodesinfo;
 	public NodeInfo leaderInfo;
 	public int myIdx; //index into NodeInfo array
 	
-	//Number of consistency model requests made by this Node
+	//Number of operation requests made by this Node
 	public int reqcnt = 0;
-	//Map that tracks how many acks we HAVE YET TO RECEIVE for a message
+	
+	//Map that tracks how many acks we have received/are yet to receive for a message
 	public ConcurrentHashMap<String, AckTracker> recvacks;
 
+	//The socket that the Node listens on
 	private ServerSocket server;
+	
+	//Command input
 	public BufferedReader inputs = null;
 	
+	//Threads
 	private CommandInputThread cmdin;
 	private MessageReceiverThread [] receivers;
 	private MessageDelayerThread [] senders;
 	
+	//This node's replica of the key-value store
 	public ConcurrentHashMap<String, Datum> sharedData;
 
 
@@ -88,6 +98,10 @@ public class Node {
 	}
 	
 	
+	/*
+	 * Reads in the config file (should sit in the directory the code runs from)
+	 * and returns -1 if any of the formatting is incorrect
+	 */
 	private int parseConfig(String[] args)
 	{
 		nodesinfo = new NodeInfo[4];
@@ -108,7 +122,6 @@ public class Node {
 		}
 
 		//Parsing config file
-		//File configfile = new File("/home/galbrth2/cs425/cs425_mp1/CS425_MP1/src/config"); //can't seem to make this a non-absolute path
 		File configfile = new File("config");
 		FileInputStream fis = null;
 
@@ -190,25 +203,23 @@ public class Node {
 				ex.printStackTrace();
 			}
 		}
-		
-//		for (int i=0; i<4; i++) { //test that node info is correct
-//			System.out.print("Node " + nodesinfo[i].id + ": ");
-//			System.out.print("IP: " + nodesinfo[i].ip + " ");
-//			System.out.print("Port: " + nodesinfo[i].port + " ");
-//			System.out.println("Max delay: " + nodesinfo[i].max_delay);
-//		}
+
 		return 0;
 	}
 	
+	
+	/*
+	 * Node spawns necessary threads after config has been read
+	 */
 	public void start() {
 
+		//Initialization
 		receivers = new MessageReceiverThread[4];
         senders = new MessageDelayerThread[4];
         for (int i=0; i<4; i++) {
         	receivers[i] = null;
         	senders[i] = null;
         }
-        
         recvacks = new ConcurrentHashMap<String, AckTracker>();
         sharedData = new ConcurrentHashMap<String, Datum>();
 
@@ -264,9 +275,6 @@ public class Node {
 			return;
 		senders[idx] = delayer;
 	}
-	
-	public void setToLeaderSendingThread(MessageSenderThread sender) {
-	}
 
 		
 	public CommandInputThread getCommandInputThread() {
@@ -310,26 +318,5 @@ public class Node {
 			nodesinfo[i].max_delay = 7.0;
 		}
 	}
-	
-	//Removes value at key and returns the removed value (Datum)
-	public Datum delete(String key){
-		return sharedData.remove(key);
-	}
-	
-	public Datum get(String key){
-		return sharedData.get(key);
-	}
 
-	//Adds new entry if nonexistent, otherwise updates existing key-val
-	public Datum insert(String key, Datum val){
-		if (sharedData.containsKey(key))
-			return sharedData.put(key, val);
-		else
-			return update(key,val);
-	}
-	
-	//updates existing key-val
-	public Datum update(String key, Datum val){
-		return sharedData.replace(key, val);
-	}
 }

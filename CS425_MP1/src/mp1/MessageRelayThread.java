@@ -11,15 +11,21 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class MessageRelayThread extends Thread {
 	
+	//Structure to hold information from config file
 	private NodeInfo [] nodesinfo;
+	//Node id of the node that this thread is receiving messages from
 	private String recvId;
 	
-	private BufferedReader ins; //coming from socket connection
+	//Stream from socket connection
+	private BufferedReader ins;
+	
+	//Totally-ordered queue to add messages to
 	private ArrayBlockingQueue<String> mqin;
 	
 	
 	public MessageRelayThread(CentralServer centralServer, Socket socket,
 			BufferedReader ins, ArrayBlockingQueue<String> mqin, int recvIdx) {
+		
 		nodesinfo = centralServer.getNodesInfo();
 		this.recvId = nodesinfo[recvIdx].id;
 		this.ins = ins;
@@ -29,6 +35,10 @@ public class MessageRelayThread extends Thread {
 	}
 
 
+	/*
+	 * This thread's main purpose is to wait until a message is received
+	 * over the socket connection, then add it to the totally-ordered queue
+	 */
 	public void run() {
 		
 		try {

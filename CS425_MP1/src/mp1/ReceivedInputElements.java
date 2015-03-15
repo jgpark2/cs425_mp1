@@ -1,7 +1,8 @@
 package mp1;
 
-//Jon's thingy cause: parsing -> Q_Q
-
+/*
+ * This simple class aids in parsing a message into its separate fields
+ */
 public class ReceivedInputElements {
 	String definition;
 	String key;
