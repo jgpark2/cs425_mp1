@@ -12,8 +12,6 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class MessageSenderThread extends Thread {
 
-	private Node node;
-	private NodeInfo [] nodesinfo;
 	private int myIdx;
 	
 	private Socket socket;
@@ -24,8 +22,7 @@ public class MessageSenderThread extends Thread {
 	
 	public MessageSenderThread(Node node, ArrayBlockingQueue<String> mq,
 			Socket socket) {
-		this.node = node;
-		nodesinfo = node.getNodesInfo();
+		node.getNodesInfo();
 		myIdx = node.myIdx;
 		this.socket = socket;
 		mqout = mq;

@@ -29,9 +29,6 @@ public class CentralServer {
 	private MessageRouterThread router; //this will create the MessageDelayerThreads on Socket connection
 	private MessageRelayThread [] receivers; //spawned from CentralServer
 	private MessageDelayerThread [] senders; //spawned from MessageRouterThread
-	private RepairThread repair; //spawned from CentralServer
-	
-	
 	public ConcurrentHashMap<String, Datum> globalData;
 
 	
@@ -58,7 +55,6 @@ public class CentralServer {
 			nodesinfo[i] = new NodeInfo();
 
 		//Parsing config file
-		//File configfile = new File("/home/galbrth2/cs425/cs425_mp1/CS425_MP1/src/config"); //can't seem to make this a non-absolute path
 		File configfile = new File("config");
 		FileInputStream fis = null;
 
@@ -138,14 +134,7 @@ public class CentralServer {
 				ex.printStackTrace();
 			}
 		}
-		
-//		for (int i=0; i<4; i++) { //test that node info is correct
-//			System.out.print("Node " + nodesinfo[i].id + ": ");
-//			System.out.print("IP: " + nodesinfo[i].ip + " ");
-//			System.out.print("Port: " + nodesinfo[i].port + " ");
-//			System.out.println("Max delay: " + nodesinfo[i].max_delay);
-//		}
-		
+
 		return 0;
 	}
 
@@ -175,13 +164,13 @@ public class CentralServer {
 			return;
         }
         
-        System.out.println("Leader started on "
-        		+leaderInfo.ip+":"+leaderInfo.port);
+        System.out.println("Leader started on "+leaderInfo.ip+":"+leaderInfo.port);
         
         Socket socket;
 		int count = 0;
 
-        while(count < 4){
+        while (count < 4) {
+        	
             try{
             	socket = server.accept();
             	BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -195,11 +184,10 @@ public class CentralServer {
             	System.out.println("Connection accept failed");
 				e.printStackTrace();
             }
+            
         }
         
-        //Start the RepairThread after the CentralServer and Nodes are all completely started
-        repair = new RepairThread(this);
-		
+        new RepairThread(this); //No one needs to keep track of this thread
 	}
 	
 	
@@ -250,16 +238,6 @@ public class CentralServer {
 			i = 3;
 					
 		return i;
-	}
-			
-			
-	public void setDefaultNodesInfo() {
-		nodesinfo = new NodeInfo[4];
-		for (int i=0; i<4; i++) {
-			nodesinfo[i] = new NodeInfo();
-			nodesinfo[i].id = "nosocket";
-			nodesinfo[i].max_delay = 7.0;
-		}
 	}
 
 }

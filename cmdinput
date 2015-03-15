@@ -3,6 +3,7 @@ delay 0.1
 insert 17 0 4
 show-all
 delay 0.3
+search 5
 get 17 3
 delay 0.5
 update 5 8 4

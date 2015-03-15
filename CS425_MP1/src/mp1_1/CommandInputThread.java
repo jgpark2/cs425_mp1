@@ -115,7 +115,7 @@ public class CommandInputThread extends Thread {
                 mqarr.get(recvIdx).put(msg);
                 last[recvIdx] = msg;
                 System.out.print("Sent \""+msg.msg+"\" to "+nodesinfo[recvIdx].id+", system time is ");
-				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss:SSS");
 				Date curdate = new Date();
 				System.out.println(format.format(curdate));
             } catch (InterruptedException e) {

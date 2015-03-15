@@ -19,13 +19,11 @@ public class MessageRouterThread extends Thread {
 	private NodeInfo [] nodesinfo;
 
 	private ArrayBlockingQueue<String> mqin;
-	private ArrayList< ArrayBlockingQueue<MessageType> > mqoutarr;
-	private int mqmax;
-	
-	private Random r;
+	public ArrayList< ArrayBlockingQueue<MessageType> > mqoutarr;
+	public Random r;
 	//These are calculated once and saved to be more efficient
 	private Double [] millismaxdelays;
-	private int [] intmaxdelays;
+	public int [] intmaxdelays;
 	
 	//This is 2D to represent all channels from a unique Id to a unique Id
 	private MessageType [][] last;
@@ -36,8 +34,6 @@ public class MessageRouterThread extends Thread {
 		this.centralServer = centralServer;
 		nodesinfo = centralServer.getNodesInfo();
 		this.mqin = mqin;
-		this.mqmax = mqmax;
-		
 		//Translate delay into necessary types
 		millismaxdelays = new Double[4];
 		intmaxdelays = new int[4];
@@ -66,7 +62,7 @@ public class MessageRouterThread extends Thread {
 			while (servconn == null) {
 				try {
 					servconn = new Socket(nodesinfo[i].ip, nodesinfo[i].port);
-    				System.out.print("Now connected to "+nodesinfo[i].ip+":"+nodesinfo[i].port);
+    				System.out.print("Server: Now connected to "+nodesinfo[i].ip+":"+nodesinfo[i].port);
     				System.out.println(" (node "+nodesinfo[i].id+")");
     				centralServer.setSendingThreadIndex(i,
     						new MessageDelayerThread(nodesinfo, -1, mqoutarr.get(i), nodesinfo[i].id, servconn));
@@ -104,7 +100,7 @@ public class MessageRouterThread extends Thread {
 	 * timestamp of the invocation of the operation (whether req or ack)
 	 * appended to the end of the message as a long type
 	 */
-	private void calculateDelayAndAddToQueue(int recvIdx, int fromIdx, String msg) {
+	public void calculateDelayAndAddToQueue(int recvIdx, int fromIdx, String msg) {
 		
 		//parse the end of the message to figure out when it was timestamped
 		int i = msg.length()-1;
@@ -117,7 +113,6 @@ public class MessageRouterThread extends Thread {
 		int randint = 0;
 		if (intmaxdelays[recvIdx] > 0)
 			randint = r.nextInt(intmaxdelays[recvIdx]); //random number of milliseconds
-//		System.out.println("Random delay to "+nodesinfo[recvIdx].id+" is "+randint+" milliseconds");
 		
 		//if last[recvIdx] is no longer in the channel, its ts will definitely be smaller
 		Long tosendts = new Long(Math.max(ts + (long)randint, last[fromIdx][recvIdx].ts.longValue()));
@@ -127,6 +122,24 @@ public class MessageRouterThread extends Thread {
 		try {
 			mqoutarr.get(recvIdx).put(tosend);
 			last[fromIdx][recvIdx] = new MessageType(tosend);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+	/*
+	 * This method assumes that all messages sent to CentralServer have the
+	 * timestamp of the invocation of the operation (whether req or ack)
+	 * appended to the end of the message as a long type
+	 * Does exactly the same thing as calculateDelayAndAddToQueue, but no delay
+	 */
+	private void noDelayAndAddToQueue(int recvIdx, int fromIdx, String msg) {
+		
+		MessageType tosend = new MessageType(msg, new Long(0));
+		
+		try {
+			mqoutarr.get(recvIdx).put(tosend);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -224,24 +237,29 @@ public class MessageRouterThread extends Thread {
 		//search key <requestingnodeid> <requestnumber> <reqorack> <timestamp>
 		else if (msg.substring(0, 7).compareToIgnoreCase("search ") == 0) {
 			
+			String tosend = new String(msg);
+			
 			//Extract requestingnodeid
 			int idx = 7;
-			while (msg.charAt(idx) != ' ') //move past key
+			while (tosend.charAt(idx) != ' ') //move past key
 				idx++;
 			idx++; //move past space between key and reqId
 			
-			String reqId = msg.substring(idx, idx+1);
+			String reqId = tosend.substring(idx, idx+1);
 			int reqIdx = centralServer.getIndexFromId(reqId);
 			
-			if (msg.lastIndexOf("req") != -1) { //request, send to all except requestingnode
+			int fromIdx = centralServer.getIndexFromId(tosend.substring(tosend.length()-1));
+			tosend = tosend.substring(0, tosend.length()-2); //take off space and fromId
+			
+			if (tosend.lastIndexOf("req") != -1) { //request, send to all except requestingnode
 				for (int i=0; i<4; i++) {
 					if (i != reqIdx)
-						ret.add(new Integer(i));
+						noDelayAndAddToQueue(i, fromIdx, tosend);
 				}
 			}
 			
 			else { //ack, send to requestingnode
-				ret.add(new Integer(reqIdx));
+				noDelayAndAddToQueue(reqIdx, fromIdx, tosend);
 			}
 		}
 		

@@ -37,9 +37,6 @@ public class Node {
 	private MessageReceiverThread [] receivers;
 	private MessageDelayerThread [] senders;
 	
-	private MessageReceiverThread fromLeader;
-	private MessageSenderThread toLeader;
-
 	public ConcurrentHashMap<String, Datum> sharedData;
 
 
@@ -257,9 +254,8 @@ public class Node {
 	public void setReceivingThreadIndex(int idx, MessageReceiverThread receiver) {
 		if ((idx < -1) || (idx > 3) || (receiver == null))
 			return;
-		if (idx == -1)
-			fromLeader = receiver;
-		else
+		if (idx == -1) {
+		} else
 			receivers[idx] = receiver;
 	}
 		
@@ -270,7 +266,6 @@ public class Node {
 	}
 	
 	public void setToLeaderSendingThread(MessageSenderThread sender) {
-		toLeader = sender;
 	}
 
 		

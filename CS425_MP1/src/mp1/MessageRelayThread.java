@@ -11,21 +11,17 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class MessageRelayThread extends Thread {
 	
-	private CentralServer centralServer;
 	private NodeInfo [] nodesinfo;
 	private String recvId;
 	
-	private Socket socket;
 	private BufferedReader ins; //coming from socket connection
 	private ArrayBlockingQueue<String> mqin;
 	
 	
 	public MessageRelayThread(CentralServer centralServer, Socket socket,
 			BufferedReader ins, ArrayBlockingQueue<String> mqin, int recvIdx) {
-		this.centralServer = centralServer;
 		nodesinfo = centralServer.getNodesInfo();
 		this.recvId = nodesinfo[recvIdx].id;
-		this.socket = socket;
 		this.ins = ins;
 		this.mqin = mqin;
 		

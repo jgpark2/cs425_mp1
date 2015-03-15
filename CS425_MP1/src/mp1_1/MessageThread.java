@@ -62,7 +62,7 @@ public class MessageThread extends Thread
 				while (msgInput == null) {
 					msgInput = ins.readLine();
 					Date now = new Date();
-					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss:SSS");
 					//System.out.println("Server" + serverNode.id+": " + msgInput);
 					System.out.print("Received \""+msgInput+"\" from " + serverNode.id);
 					System.out.print(", Max delay is " + myInfo.max_delay + " s, ");
@@ -84,7 +84,7 @@ public class MessageThread extends Thread
 					continue;
 				//System.out.println("Client: " + msgOutput);
 				System.out.print("Sent \""+msgOutput+"\" to "+serverNode.id+", system time is ");
-				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss:SSS");
 				Date now = new Date();
 				System.out.println(format.format(now));
 				//addMessageToQueue(msgOutput);

@@ -73,7 +73,7 @@ public class MessageReceiverThread extends Thread {
 			while (((input = ins.readLine()) != null) && (input.compareToIgnoreCase("exit") != 0)) {
 				
 				Date now = new Date();
-				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss:SSS");
 		    	
 		    	System.out.print("Received \""+input+"\" from " + nodesinfo[recvIdx].id);
 				System.out.print(", Max delay is " + nodesinfo[myIdx].max_delay + " s, ");

@@ -17,10 +17,8 @@ public class MessageReceiverThread extends Thread {
 	private NodeInfo [] nodesinfo;
 	private int myIdx; //index into NodeInfo array
 	
-	private int recvIdx; //index into NodeInfo array
 	private String recvId;
 	
-	private Socket client;
 	private BufferedReader ins;
 	
 
@@ -29,9 +27,7 @@ public class MessageReceiverThread extends Thread {
 		this.node = node;
 		this.nodesinfo = node.getNodesInfo();
 		myIdx = node.myIdx;
-		this.recvIdx = recvIdx;
 		recvId = node.getIdFromIndex(recvIdx);
-		client = socket;
 		this.ins = ins;
 		
 		new Thread(this, "ReceiveMessage").start();
@@ -49,7 +45,6 @@ public class MessageReceiverThread extends Thread {
 				
 				//get key model <requestingnodeid> <requestnumber> <value> <reqorack> <timestamp>
 				if (input.lastIndexOf("get ") == 0) {
-//					System.out.println("Received get message "+input+", system time is "+System.currentTimeMillis());
 					node.getCommandInputThread().respondToGetMessage(input);
 				}
 				
@@ -64,7 +59,7 @@ public class MessageReceiverThread extends Thread {
 					String key = input.substring(7, i);
 					
 					node.sharedData.remove(key); //remove key from our replica
-					System.out.println("Key "+key+" deleted");
+					System.out.println("Server: Key "+key+" deleted");
 				}
 				
 				//insert key value model <requestingnodeid> <requestnumber> <reqorack> <timestamp>
@@ -95,9 +90,9 @@ public class MessageReceiverThread extends Thread {
 				//send message destination, simply print out
 				else {
 					Date now = new Date();
-					SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+					SimpleDateFormat format = new SimpleDateFormat("H:mm:ss.SSS");
 					
-					System.out.print("Received \""+input+"\" from " + recvId);
+					System.out.print("Client: Received \""+input+"\" from " + recvId);
 					System.out.print(", Max delay is " + nodesinfo[myIdx].max_delay + " s, ");
 					System.out.println("system time is "+format.format(now));
 				}
@@ -107,22 +102,6 @@ public class MessageReceiverThread extends Thread {
 			e.printStackTrace();
 			return;
 		}
-		
-		
-		//This code should get run if we intend all nodes to exit at the same time
-/*
-		CommandInputThread cmdint = node.getCommandInputThread();
-		MessageType msg = new MessageType("exit", new Long(0));
-		cmdint.addMessageToAllQueues(msg);
-		
-		System.out.println("MessageReceiverThread from node "+recvId+" received exit, exiting");
-		try {
-			client.close();
-			ins.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-*/
 		
 	}
 	

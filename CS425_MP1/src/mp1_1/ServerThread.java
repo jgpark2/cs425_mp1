@@ -75,7 +75,7 @@ public class ServerThread extends Thread
 		    //While client keeps writing to its own output Stream...
 		    while((msgInput = ins.readLine())!=null) {
 		    	Date now = new Date();
-				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
+				SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss:SSS");
 		    	
 		    	System.out.print("Received \""+msgInput+"\" from " + clientId);
 				System.out.print(", Max delay is " + myInfo.max_delay + " s, ");

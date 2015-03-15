@@ -18,10 +18,5 @@ public class MessageType {
 		this.msg = new String(msg.msg);
 		this.ts = msg.ts;
 	}
-	
-	//TODO: parse any message received over a socket for its timestamp
-	//timestamp should always be at the end of the message
-	public static long getTimeStampOutOfMessage(String msg) {
-		return 0;
-	}
+
 }

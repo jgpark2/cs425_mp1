@@ -12,10 +12,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class MessageDelayerThread extends Thread {
 
-	private NodeInfo [] nodesinfo;
 	private int myIdx; //index into NodeInfo array
-	
-	private String recvId;
 	
 	private ArrayBlockingQueue<MessageType> mq;
 	
@@ -26,10 +23,8 @@ public class MessageDelayerThread extends Thread {
     public MessageDelayerThread(NodeInfo [] nodesinfo, int myIdx, ArrayBlockingQueue<MessageType> mq,
     		String recvId, Socket connection) {
 
-    	this.nodesinfo = nodesinfo;
     	this.myIdx = myIdx;
-    	this.recvId = recvId;
-		this.mq = mq;
+    	this.mq = mq;
 		socket = connection;
 		
 		new Thread(this, "DelayInput"+recvId).start();
@@ -60,8 +55,9 @@ public class MessageDelayerThread extends Thread {
 			try {
 				msg = mq.take();
 				long tosleep = msg.ts - System.currentTimeMillis();
-				if (tosleep > 0)
+				if (tosleep > 0) {
 					Thread.sleep(tosleep);
+				}
 				
 				//while MessageReceiverThread keeps reading from its input stream...
 				outs.println(msg.msg);
